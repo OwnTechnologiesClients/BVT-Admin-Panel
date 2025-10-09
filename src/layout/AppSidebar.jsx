@@ -14,6 +14,7 @@ import {
   SettingsIcon,
   ChevronDownIcon,
   HorizontaLDots,
+  ClipboardListIcon,
 } from "../icons/index";
 
 const navItems = [
@@ -44,6 +45,14 @@ const navItems = [
     subItems: [
       { name: "Add Program", path: "/programs/add" },
       { name: "View Programs", path: "/programs" },
+    ],
+  },
+  {
+    icon: <ClipboardListIcon />,
+    name: "Tests",
+    subItems: [
+      { name: "Add Test", path: "/tests/add" },
+      { name: "View Tests", path: "/tests" },
     ],
   },
   {

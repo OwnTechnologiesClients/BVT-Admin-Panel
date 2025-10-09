@@ -15,7 +15,8 @@ import {
   FaGraduationCap,
   FaUsers,
   FaCog,
-  FaChartBar
+  FaChartBar,
+  FaClipboardList
 } from 'react-icons/fa';
 
 export {
@@ -36,4 +37,5 @@ export {
   FaUsers as UsersIcon,
   FaCog as SettingsIcon,
   FaChartBar as BarChartIcon,
+  FaClipboardList as ClipboardListIcon,
 };
