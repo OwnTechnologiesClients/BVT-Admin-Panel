@@ -271,11 +271,24 @@ const AppSidebar = () => {
       >
         <Link href="/">
           {isExpanded || isHovered || isMobileOpen ? (
-            <div className="text-xl font-bold text-blue-600">
-              BVT Admin
+            <div className="flex items-center space-x-3">
+              <img 
+                src="/BVT_logo.png" 
+                alt="BVT Admin Logo" 
+                className="w-8 h-8 object-contain"
+              />
+              <div className="text-xl font-bold text-blue-600">
+                BVT Admin
+              </div>
             </div>
           ) : (
-            <div className="text-lg font-bold text-blue-600">BVT</div>
+            <div className="flex items-center justify-center">
+              <img 
+                src="/BVT_logo.png" 
+                alt="BVT Logo" 
+                className="w-8 h-8 object-contain"
+              />
+            </div>
           )}
         </Link>
       </div>

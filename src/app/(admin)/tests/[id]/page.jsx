@@ -15,7 +15,9 @@ import {
   Download,
   Mail,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 const TestDetailsPage = () => {
@@ -46,6 +48,7 @@ const TestDetailsPage = () => {
   });
 
   const [selectedTab, setSelectedTab] = useState("completed"); // completed, pending, all
+  const [resultsReleased, setResultsReleased] = useState(false);
 
   const [students] = useState([
     {
@@ -183,9 +186,29 @@ const TestDetailsPage = () => {
             <Download className="w-4 h-4" />
             Export Results
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             <Mail className="w-4 h-4" />
             Notify Pending
+          </button>
+          <button 
+            onClick={() => setResultsReleased(!resultsReleased)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+              resultsReleased 
+                ? "bg-green-600 text-white hover:bg-green-700" 
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
+          >
+            {resultsReleased ? (
+              <>
+                <Eye className="w-4 h-4" />
+                Results Released
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-4 h-4" />
+                Release Results
+              </>
+            )}
           </button>
         </div>
       </div>

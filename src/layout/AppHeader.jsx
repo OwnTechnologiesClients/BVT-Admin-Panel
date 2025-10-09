@@ -82,7 +82,14 @@ const AppHeader = () => {
           </button>
 
           <Link href="/" className="lg:hidden">
-            <div className="text-lg font-bold text-blue-600">BVT Admin</div>
+            <div className="flex items-center space-x-2">
+              <img 
+                src="/BVT_logo.png" 
+                alt="BVT Admin Logo" 
+                className="w-8 h-8 object-contain"
+              />
+              <div className="text-lg font-bold text-blue-600">BVT Admin</div>
+            </div>
           </Link>
 
           <button

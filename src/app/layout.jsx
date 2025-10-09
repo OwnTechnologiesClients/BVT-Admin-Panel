@@ -10,6 +10,11 @@ const outfit = Outfit({
 export const metadata = {
   title: "BVT Training Admin Dashboard",
   description: "Admin dashboard for BVT Training Website",
+  icons: {
+    icon: "/BVT_logo.png",
+    shortcut: "/BVT_logo.png",
+    apple: "/BVT_logo.png",
+  },
 };
 
 export default function RootLayout({ children }) {
