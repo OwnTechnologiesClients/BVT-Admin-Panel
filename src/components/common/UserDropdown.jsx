@@ -1,10 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dropdown, DropdownItem } from "@/components/ui";
+import { useAuth } from "@/context/AuthContext";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
+  const { user, role, availableRoles, setRole } = useAuth();
+  const router = useRouter();
 
   function toggleDropdown(e) {
     e.stopPropagation();
@@ -23,11 +27,15 @@ export default function UserDropdown() {
       >
         <span className="mr-3 overflow-hidden rounded-full h-11 w-11">
           <div className="w-11 h-11 bg-blue-500 rounded-full flex items-center justify-center">
-            <span className="text-white font-semibold text-lg">AD</span>
+            <span className="text-white font-semibold text-lg">
+              {user.avatarInitials}
+            </span>
           </div>
         </span>
 
-        <span className="block mr-1 font-medium text-sm">Admin</span>
+        <span className="block mr-1 font-medium text-sm capitalize">
+          {role}
+        </span>
 
         <svg
           className={`stroke-gray-700 transition-transform duration-200 ${
@@ -56,11 +64,16 @@ export default function UserDropdown() {
       >
         <div>
           <span className="block font-medium text-gray-700 text-sm">
-            Admin User
+            {user.name}
           </span>
           <span className="mt-0.5 block text-xs text-gray-700">
-            admin@bvt-training.com
+            {user.email}
           </span>
+          {user.title && (
+            <span className="mt-1 block text-xs text-gray-500">
+              {user.title}
+            </span>
+          )}
         </div>
 
         <ul className="flex flex-col gap-1 pt-4 pb-3 border-b border-gray-200">
@@ -115,6 +128,43 @@ export default function UserDropdown() {
             </DropdownItem>
           </li>
         </ul>
+        <div className="py-3 border-b border-gray-200">
+          <p className="text-xs font-semibold uppercase text-gray-400 mb-2">
+            Preview as
+          </p>
+          <div className="flex gap-2">
+            {availableRoles.map((availableRole) => (
+              <button
+                key={availableRole}
+                onClick={() => {
+                  setRole(availableRole);
+                  closeDropdown();
+                  router.push(
+                    availableRole === "instructor" ? "/instructor" : "/"
+                  );
+                }}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  availableRole === role
+                    ? "bg-blue-100 text-blue-600"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {availableRole === "admin" ? "Admin" : "Instructor"}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => {
+              const nextRole = role === "admin" ? "instructor" : "admin";
+              setRole(nextRole);
+              closeDropdown();
+              router.push(nextRole === "instructor" ? "/instructor" : "/");
+            }}
+            className="mt-3 w-full rounded-lg border border-gray-200 bg-white py-2 text-sm font-medium text-gray-700 hover:border-blue-300 hover:text-blue-600 transition-colors"
+          >
+            Toggle Role
+          </button>
+        </div>
         <a
           href="/signin"
           className="flex items-center gap-3 px-3 py-2 mt-3 font-medium text-gray-700 rounded-lg group text-sm hover:bg-gray-100 hover:text-gray-700"

@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   GridIcon,
   BookOpenIcon,
@@ -17,7 +18,7 @@ import {
   ClipboardListIcon,
 } from "../icons/index";
 
-const navItems = [
+const adminNavItems = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
@@ -25,56 +26,87 @@ const navItems = [
   },
   {
     icon: <BookOpenIcon />,
-    name: "Courses",
+    name: "Course Management",
     subItems: [
-      { name: "Add Course", path: "/courses/add" },
-      { name: "View Courses", path: "/courses" },
+      { name: "Course Categories", path: "/course-categories", subItems: [
+        { name: "View Categories", path: "/course-categories" },
+        { name: "Add Category", path: "/course-categories/add" }
+      ]},
+      { name: "Courses", path: "/courses", subItems: [
+        { name: "View Courses", path: "/courses" },
+        { name: "Add Course", path: "/courses/add" }
+      ]},
+      { name: "Chapters", path: "/chapters", subItems: [
+        { name: "View Chapters", path: "/chapters" },
+        { name: "Add Chapter", path: "/chapters/add" }
+      ]},
+      { name: "Lessons", path: "/lessons", subItems: [
+        { name: "View Lessons", path: "/lessons" },
+        { name: "Add Lesson", path: "/lessons/add" }
+      ]},
+      { name: "Lesson Content", path: "/lesson-content", subItems: [
+        { name: "View Content", path: "/lesson-content" },
+        { name: "Add Content", path: "/lesson-content/add" }
+      ]},
     ],
   },
   {
     icon: <CalendarDaysIcon />,
     name: "Events",
     subItems: [
-      { name: "Add Event", path: "/events/add" },
       { name: "View Events", path: "/events" },
+      { name: "Add Event", path: "/events/add" },
     ],
   },
   {
     icon: <GraduationCapIcon />,
     name: "Programs",
     subItems: [
-      { name: "Add Program", path: "/programs/add" },
       { name: "View Programs", path: "/programs" },
+      { name: "Add Program", path: "/programs/add" },
     ],
   },
   {
     icon: <ClipboardListIcon />,
     name: "Tests",
     subItems: [
-      { name: "Add Test", path: "/tests/add" },
       { name: "View Tests", path: "/tests" },
+      { name: "Add Test", path: "/tests/add" },
     ],
   },
   {
     icon: <UsersIcon />,
-    name: "Users",
+    name: "Students",
     subItems: [
-      { name: "Add User", path: "/users/add" },
-      { name: "View Users", path: "/users" },
-      { name: "Instructors", path: "/users/instructors" },
-      { name: "Students", path: "/users/students" },
+      { name: "View Students", path: "/students" },
+      { name: "Add Student", path: "/students/add" },
+    ],
+  },
+  {
+    icon: <UsersIcon />,
+    name: "Instructors",
+    subItems: [
+      { name: "View Instructors", path: "/instructors" },
+      { name: "Add Instructor", path: "/instructors/add" },
     ],
   },
 ];
 
-const othersItems = [
+const adminOthersItems = [
   {
     icon: <BarChartIcon />,
     name: "Analytics",
     subItems: [
       { name: "Course Analytics", path: "/analytics/courses" },
-      { name: "User Analytics", path: "/analytics/users" },
+      { name: "Instructor Analytics", path: "/analytics/instructors" },
       { name: "Revenue Analytics", path: "/analytics/revenue" },
+    ],
+  },
+  {
+    icon: <ClipboardListIcon />,
+    name: "Notifications",
+    subItems: [
+      { name: "Student Queries", path: "/notifications" },
     ],
   },
   {
@@ -83,14 +115,79 @@ const othersItems = [
     subItems: [
       { name: "General Settings", path: "/settings/general" },
       { name: "Course Settings", path: "/settings/courses" },
-      { name: "User Settings", path: "/settings/users" },
+      { name: "Instructor Settings", path: "/settings/instructors" },
+    ],
+  },
+];
+
+const instructorNavItems = [
+  {
+    icon: <GridIcon />,
+    name: "Dashboard",
+    subItems: [{ name: "Overview", path: "/instructor" }],
+  },
+  {
+    icon: <BookOpenIcon />,
+    name: "My Courses",
+    subItems: [
+      { name: "Course List", path: "/instructor/courses" },
+      { name: "Upcoming Sessions", path: "/instructor/schedule" },
+    ],
+  },
+  {
+    icon: <UsersIcon />,
+    name: "Students",
+    subItems: [
+      { name: "Student Roster", path: "/instructor/students" },
+      { name: "Progress Reports", path: "/instructor/students/progress" },
+    ],
+  },
+  {
+    icon: <ClipboardListIcon />,
+    name: "Assessments",
+    subItems: [
+      { name: "All Tests", path: "/instructor/tests" },
+      { name: "Create Test", path: "/instructor/tests/create" },
+    ],
+  },
+];
+
+const instructorOthersItems = [
+  {
+    icon: <ClipboardListIcon />,
+    name: "Notifications",
+    subItems: [
+      { name: "Student Queries", path: "/instructor/notifications" },
+    ],
+  },
+  {
+    icon: <BarChartIcon />,
+    name: "Insights",
+    subItems: [
+      { name: "Course Performance", path: "/instructor/insights/courses" },
+      { name: "Student Engagement", path: "/instructor/insights/engagement" },
+    ],
+  },
+  {
+    icon: <SettingsIcon />,
+    name: "Profile",
+    subItems: [
+      { name: "My Profile", path: "/instructor/profile" },
+      { name: "Availability", path: "/instructor/profile/availability" },
     ],
   },
 ];
 
 const AppSidebar = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { role } = useAuth();
   const pathname = usePathname();
+  const primaryNav =
+    role === "instructor" ? instructorNavItems : adminNavItems;
+  const secondaryNav =
+    role === "instructor" ? instructorOthersItems : adminOthersItems;
+  const homeHref = role === "instructor" ? "/instructor" : "/";
+  const brandLabel = role === "instructor" ? "BVT Instructor" : "BVT Admin";
 
   const [openSubmenu, setOpenSubmenu] = useState({
     type: "main",
@@ -99,13 +196,19 @@ const AppSidebar = () => {
   const [subMenuHeight, setSubMenuHeight] = useState({});
   const subMenuRefs = useRef({});
 
-  const isActive = useCallback((path) => path === pathname, [pathname]);
+  const isActive = useCallback(
+    (path) =>
+      path === pathname ||
+      (path !== "/" && pathname.startsWith(path + "/")) ||
+      (path !== "/" && pathname === path),
+    [pathname]
+  );
 
   useEffect(() => {
     // Check if the current path matches any submenu item
     let submenuMatched = false;
     ["main", "others"].forEach((menuType) => {
-      const items = menuType === "main" ? navItems : othersItems;
+      const items = menuType === "main" ? primaryNav : secondaryNav;
       items.forEach((nav, index) => {
         if (nav.subItems) {
           nav.subItems.forEach((subItem) => {
@@ -125,7 +228,7 @@ const AppSidebar = () => {
     if (!submenuMatched) {
       setOpenSubmenu({ type: "main", index: null });
     }
-  }, [pathname, isActive]);
+  }, [pathname, isActive, primaryNav, secondaryNav]);
 
   useEffect(() => {
     // Set the height of the submenu items when the submenu is opened
@@ -230,18 +333,44 @@ const AppSidebar = () => {
               }}
             >
               <ul className="mt-2 space-y-1 ml-9">
-                {nav.subItems.map((subItem) => (
+                {nav.subItems.map((subItem, subIndex) => (
                   <li key={subItem.name}>
-                    <Link
-                      href={subItem.path}
-                      className={`menu-dropdown-item ${
-                        isActive(subItem.path)
-                          ? "menu-dropdown-item-active"
-                          : "menu-dropdown-item-inactive"
-                      }`}
-                    >
-                      {subItem.name}
-                    </Link>
+                    {subItem.subItems ? (
+                      // If this subItem has its own subItems, render them with nested structure
+                      <div>
+                        <div className="menu-dropdown-item flex items-center justify-between">
+                          <span className="font-semibold">{subItem.name}</span>
+                        </div>
+                        <ul className="ml-4 mt-1 space-y-1">
+                          {subItem.subItems.map((nestedSubItem) => (
+                            <li key={nestedSubItem.name}>
+                              <Link
+                                href={nestedSubItem.path}
+                                className={`menu-dropdown-item ${
+                                  isActive(nestedSubItem.path)
+                                    ? "menu-dropdown-item-active"
+                                    : "menu-dropdown-item-inactive"
+                                }`}
+                              >
+                                {nestedSubItem.name}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      // Regular subItem without nested items
+                      <Link
+                        href={subItem.path}
+                        className={`menu-dropdown-item ${
+                          isActive(subItem.path)
+                            ? "menu-dropdown-item-active"
+                            : "menu-dropdown-item-inactive"
+                        }`}
+                      >
+                        {subItem.name}
+                      </Link>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -269,7 +398,7 @@ const AppSidebar = () => {
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link href="/">
+        <Link href={homeHref}>
           {isExpanded || isHovered || isMobileOpen ? (
             <div className="flex items-center space-x-3">
               <img 
@@ -277,9 +406,7 @@ const AppSidebar = () => {
                 alt="BVT Admin Logo" 
                 className="w-8 h-8 object-contain"
               />
-              <div className="text-xl font-bold text-blue-600">
-                BVT Admin
-              </div>
+              <div className="text-xl font-bold text-blue-600">{brandLabel}</div>
             </div>
           ) : (
             <div className="flex items-center justify-center">
@@ -309,7 +436,7 @@ const AppSidebar = () => {
                   <HorizontaLDots />
                 )}
               </h2>
-              {renderMenuItems(navItems, "main")}
+              {renderMenuItems(primaryNav, "main")}
             </div>
 
             <div className="">
@@ -326,7 +453,7 @@ const AppSidebar = () => {
                   <HorizontaLDots />
                 )}
               </h2>
-              {renderMenuItems(othersItems, "others")}
+              {renderMenuItems(secondaryNav, "others")}
             </div>
           </div>
         </nav>

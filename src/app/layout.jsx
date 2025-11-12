@@ -2,6 +2,7 @@ import { Outfit } from 'next/font/google';
 import './globals.css';
 import { SidebarProvider } from '@/context/SidebarContext';
 import { ThemeProvider } from '@/context/ThemeContext';
+import { AuthProvider } from '@/context/AuthContext';
 
 const outfit = Outfit({
   subsets: ["latin"],
@@ -34,9 +35,11 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${outfit.className} bg-gray-50`}>
-        <ThemeProvider>
-          <SidebarProvider>{children}</SidebarProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <SidebarProvider>{children}</SidebarProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );

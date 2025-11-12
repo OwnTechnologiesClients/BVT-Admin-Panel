@@ -9,29 +9,31 @@ const MultiStepCourseForm = () => {
   const [formData, setFormData] = useState({
     // Step 1: Basic Information
     title: "",
+    slug: "",
     description: "",
     category: "",
     instructor: "",
     duration: "",
-    maxStudents: "",
-    isOnline: false,
+    level: "Beginner",
+    price: "",
+    originalPrice: "",
+    image: "",
+    isFeatured: false,
+    isOnline: true,
+    maxStudents: 100,
     
     // Step 2: Course Details
-    price: "",
-    difficulty: "",
     prerequisites: "",
-    learningObjectives: "",
-    materials: "",
+    learningObjectives: [],
     
-    // Step 3: Lesson Plans
-    lessons: [
+    // Step 3: Course Structure (Chapters)
+    chapters: [
       {
         id: 1,
         title: "",
         description: "",
-        duration: "",
-        type: "lecture",
-        materials: ""
+        order: 1,
+        duration: ""
       }
     ]
   });
@@ -45,38 +47,61 @@ const MultiStepCourseForm = () => {
     }));
   };
 
-  const handleLessonChange = (index, field, value) => {
-    const updatedLessons = [...formData.lessons];
-    updatedLessons[index][field] = value;
+  const handleChapterChange = (index, field, value) => {
+    const updatedChapters = [...formData.chapters];
+    updatedChapters[index][field] = value;
     setFormData(prev => ({
       ...prev,
-      lessons: updatedLessons
+      chapters: updatedChapters
     }));
   };
 
-  const addLesson = () => {
-    const newLesson = {
-      id: formData.lessons.length + 1,
+  const addChapter = () => {
+    const newChapter = {
+      id: formData.chapters.length + 1,
       title: "",
       description: "",
-      duration: "",
-      type: "lecture",
-      materials: ""
+      order: formData.chapters.length + 1,
+      duration: ""
     };
     setFormData(prev => ({
       ...prev,
-      lessons: [...prev.lessons, newLesson]
+      chapters: [...prev.chapters, newChapter]
     }));
   };
 
-  const removeLesson = (index) => {
-    if (formData.lessons.length > 1) {
-      const updatedLessons = formData.lessons.filter((_, i) => i !== index);
+  const removeChapter = (index) => {
+    if (formData.chapters.length > 1) {
+      const updatedChapters = formData.chapters.filter((_, i) => i !== index);
       setFormData(prev => ({
         ...prev,
-        lessons: updatedLessons
+        chapters: updatedChapters
       }));
     }
+  };
+
+  const addLearningObjective = () => {
+    setFormData(prev => ({
+      ...prev,
+      learningObjectives: [...prev.learningObjectives, ""]
+    }));
+  };
+
+  const removeLearningObjective = (index) => {
+    const updatedObjectives = formData.learningObjectives.filter((_, i) => i !== index);
+    setFormData(prev => ({
+      ...prev,
+      learningObjectives: updatedObjectives
+    }));
+  };
+
+  const handleObjectiveChange = (index, value) => {
+    const updatedObjectives = [...formData.learningObjectives];
+    updatedObjectives[index] = value;
+    setFormData(prev => ({
+      ...prev,
+      learningObjectives: updatedObjectives
+    }));
   };
 
   const nextStep = () => {
@@ -118,6 +143,34 @@ const MultiStepCourseForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
+            Course Slug *
+          </label>
+          <input
+            type="text"
+            value={formData.slug}
+            onChange={(e) => handleInputChange("slug", e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="course-slug"
+            required
+          />
+        </div>
+
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Description *
+          </label>
+          <textarea
+            value={formData.description}
+            onChange={(e) => handleInputChange("description", e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Enter course description"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Category *
           </label>
           <select
@@ -139,14 +192,17 @@ const MultiStepCourseForm = () => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Instructor *
           </label>
-          <input
-            type="text"
+          <select
             value={formData.instructor}
             onChange={(e) => handleInputChange("instructor", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter instructor name"
             required
-          />
+          >
+            <option value="">Select instructor</option>
+            <option value="instructor-1">Commander Sarah Johnson</option>
+            <option value="instructor-2">Captain Michael Chen</option>
+            <option value="instructor-3">Lieutenant Commander David Rodriguez</option>
+          </select>
         </div>
 
         <div>
@@ -158,56 +214,27 @@ const MultiStepCourseForm = () => {
             value={formData.duration}
             onChange={(e) => handleInputChange("duration", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="e.g., 5 days, 8 weeks"
+            placeholder="e.g., 12 weeks, 5 days"
             required
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Maximum Students
+            Level *
           </label>
-          <input
-            type="number"
-            value={formData.maxStudents}
-            onChange={(e) => handleInputChange("maxStudents", e.target.value)}
+          <select
+            value={formData.level}
+            onChange={(e) => handleInputChange("level", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter max students"
-          />
+            required
+          >
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+          </select>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <Switch
-            checked={formData.isOnline}
-            onChange={(checked) => handleInputChange("isOnline", checked)}
-          />
-          <label className="text-sm font-medium text-gray-700">
-            Online Course
-          </label>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Description *
-        </label>
-        <textarea
-          value={formData.description}
-          onChange={(e) => handleInputChange("description", e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter course description"
-          required
-        />
-      </div>
-    </div>
-  );
-
-  const renderStep2 = () => (
-    <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">Course Details</h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Price *
@@ -218,28 +245,81 @@ const MultiStepCourseForm = () => {
             onChange={(e) => handleInputChange("price", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter course price"
+            min="0"
             required
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Difficulty Level *
+            Original Price
           </label>
-          <select
-            value={formData.difficulty}
-            onChange={(e) => handleInputChange("difficulty", e.target.value)}
+          <input
+            type="number"
+            value={formData.originalPrice}
+            onChange={(e) => handleInputChange("originalPrice", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          >
-            <option value="">Select difficulty</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
+            placeholder="Enter original price"
+            min="0"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Max Students
+          </label>
+          <input
+            type="number"
+            value={formData.maxStudents}
+            onChange={(e) => handleInputChange("maxStudents", e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Maximum students"
+            min="1"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Course Image
+          </label>
+          <input
+            type="text"
+            value={formData.image}
+            onChange={(e) => handleInputChange("image", e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            placeholder="Image URL"
+          />
         </div>
       </div>
 
+      <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-3">
+          <Switch
+            checked={formData.isOnline}
+            onChange={(checked) => handleInputChange("isOnline", checked)}
+          />
+          <label className="text-sm font-medium text-gray-700">
+            Online Course
+          </label>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <Switch
+            checked={formData.isFeatured}
+            onChange={(checked) => handleInputChange("isFeatured", checked)}
+          />
+          <label className="text-sm font-medium text-gray-700">
+            Featured Course
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep2 = () => (
+    <div className="space-y-6">
+      <h3 className="text-lg font-semibold text-gray-900">Course Details</h3>
+      
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Prerequisites
@@ -249,35 +329,47 @@ const MultiStepCourseForm = () => {
           onChange={(e) => handleInputChange("prerequisites", e.target.value)}
           rows={3}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter prerequisites"
+          placeholder="Enter course prerequisites"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Learning Objectives *
-        </label>
-        <textarea
-          value={formData.learningObjectives}
-          onChange={(e) => handleInputChange("learningObjectives", e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter learning objectives"
-          required
-        />
-      </div>
+        <div className="flex items-center justify-between mb-4">
+          <label className="block text-sm font-medium text-gray-700">
+            Learning Objectives
+          </label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addLearningObjective}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Objective
+          </Button>
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Materials & Resources
-        </label>
-        <textarea
-          value={formData.materials}
-          onChange={(e) => handleInputChange("materials", e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter required materials"
-        />
+        {formData.learningObjectives.map((objective, index) => (
+          <div key={index} className="flex items-center gap-3 mb-3">
+            <input
+              type="text"
+              value={objective}
+              onChange={(e) => handleObjectiveChange(index, e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter learning objective"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => removeLearningObjective(index)}
+              className="text-red-600 hover:text-red-700"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -285,29 +377,29 @@ const MultiStepCourseForm = () => {
   const renderStep3 = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Lesson Plans</h3>
+        <h3 className="text-lg font-semibold text-gray-900">Course Structure</h3>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={addLesson}
+          onClick={addChapter}
           className="flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          Add Lesson
+          Add Chapter
         </Button>
       </div>
 
-      {formData.lessons.map((lesson, index) => (
-        <div key={lesson.id} className="border border-gray-200 rounded-lg p-6">
+      {formData.chapters.map((chapter, index) => (
+        <div key={chapter.id} className="border border-gray-200 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="font-medium text-gray-900">Lesson {index + 1}</h4>
-            {formData.lessons.length > 1 && (
+            <h4 className="font-medium text-gray-900">Chapter {index + 1}</h4>
+            {formData.chapters.length > 1 && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => removeLesson(index)}
+                onClick={() => removeChapter(index)}
                 className="text-red-600 hover:text-red-700"
               >
                 <Trash2 className="w-4 h-4" />
@@ -318,75 +410,43 @@ const MultiStepCourseForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Lesson Title *
+                Chapter Title *
               </label>
               <input
                 type="text"
-                value={lesson.title}
-                onChange={(e) => handleLessonChange(index, "title", e.target.value)}
+                value={chapter.title}
+                onChange={(e) => handleChapterChange(index, "title", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter lesson title"
+                placeholder="Enter chapter title"
                 required
               />
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Duration *
+                Duration
               </label>
               <input
                 type="text"
-                value={lesson.duration}
-                onChange={(e) => handleLessonChange(index, "duration", e.target.value)}
+                value={chapter.duration}
+                onChange={(e) => handleChapterChange(index, "duration", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="e.g., 2 hours, 1 day"
-                required
+                placeholder="e.g., 2 hours"
               />
             </div>
 
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Lesson Type *
+                Description
               </label>
-              <select
-                value={lesson.type}
-                onChange={(e) => handleLessonChange(index, "type", e.target.value)}
+              <textarea
+                value={chapter.description}
+                onChange={(e) => handleChapterChange(index, "description", e.target.value)}
+                rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              >
-                <option value="lecture">Lecture</option>
-                <option value="practical">Practical</option>
-                <option value="workshop">Workshop</option>
-                <option value="assessment">Assessment</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Materials
-              </label>
-              <input
-                type="text"
-                value={lesson.materials}
-                onChange={(e) => handleLessonChange(index, "materials", e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Required materials"
+                placeholder="Enter chapter description"
               />
             </div>
-          </div>
-
-          <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Lesson Description *
-            </label>
-            <textarea
-              value={lesson.description}
-              onChange={(e) => handleLessonChange(index, "description", e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter lesson description"
-              required
-            />
           </div>
         </div>
       ))}

@@ -14,6 +14,8 @@ const MultiStepEventForm = () => {
     category: "",
     maxAttendees: "",
     isOnline: false,
+    eventImage: null,
+    tags: [],
     
     // Step 2: Event Details
     startDate: "",
@@ -25,7 +27,22 @@ const MultiStepEventForm = () => {
     registrationDeadline: "",
     cost: "",
     
-    // Step 3: Event Schedule & Materials
+    // Step 3: Speakers
+    speakers: [
+      {
+        id: 1,
+        name: "",
+        bio: "",
+        company: "",
+        title: "",
+        photo: null,
+        email: "",
+        linkedin: "",
+        topics: ""
+      }
+    ],
+    
+    // Step 4: Event Schedule
     agenda: [
       {
         id: 1,
@@ -35,12 +52,10 @@ const MultiStepEventForm = () => {
         speaker: "",
         duration: ""
       }
-    ],
-    materials: "",
-    requirements: ""
+    ]
   });
 
-  const totalSteps = 3;
+  const totalSteps = 4;
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -83,6 +98,59 @@ const MultiStepEventForm = () => {
     }
   };
 
+  const handleSpeakerChange = (index, field, value) => {
+    const updatedSpeakers = [...formData.speakers];
+    updatedSpeakers[index][field] = value;
+    setFormData(prev => ({
+      ...prev,
+      speakers: updatedSpeakers
+    }));
+  };
+
+  const addSpeaker = () => {
+    const newSpeaker = {
+      id: formData.speakers.length + 1,
+      name: "",
+      bio: "",
+      company: "",
+      title: "",
+      photo: null,
+      email: "",
+      linkedin: "",
+      topics: ""
+    };
+    setFormData(prev => ({
+      ...prev,
+      speakers: [...prev.speakers, newSpeaker]
+    }));
+  };
+
+  const removeSpeaker = (index) => {
+    if (formData.speakers.length > 1) {
+      const updatedSpeakers = formData.speakers.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        speakers: updatedSpeakers
+      }));
+    }
+  };
+
+  const addTag = (tag) => {
+    if (tag && !formData.tags.includes(tag)) {
+      setFormData(prev => ({
+        ...prev,
+        tags: [...prev.tags, tag]
+      }));
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.filter(tag => tag !== tagToRemove)
+    }));
+  };
+
   const nextStep = () => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
@@ -105,6 +173,39 @@ const MultiStepEventForm = () => {
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
       
+      {/* Event Image Upload */}
+      <div className="flex flex-col items-center gap-4">
+        <label className="block text-sm font-semibold text-gray-700">Event Cover Image <span className="font-normal text-xs text-gray-400">(optional)</span></label>
+        {formData.eventImage ? (
+          <div className="relative group">
+            <img
+              src={typeof formData.eventImage === 'string' ? formData.eventImage : URL.createObjectURL(formData.eventImage)}
+              alt="Event cover"
+              className="rounded-xl border border-gray-200 max-h-48 max-w-md object-cover shadow-md"
+            />
+            <button
+              type="button"
+              onClick={() => handleInputChange("eventImage", null)}
+              className="absolute top-2 right-2 bg-white hover:bg-red-100 rounded-full p-2 text-red-600 border border-red-200 shadow"
+              title="Remove image"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <label className="block cursor-pointer bg-white border border-dashed border-gray-300 rounded-xl px-6 py-8 min-h-[200px] min-w-[300px] flex flex-col items-center justify-center text-center text-gray-500 hover:border-blue-400 transition-all">
+            <Plus className="w-12 h-12 mb-2" />
+            <span className="font-medium">Click to upload event cover image</span>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={e => handleInputChange("eventImage", e.target.files[0])}
+              className="hidden"
+            />
+          </label>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -193,6 +294,39 @@ const MultiStepEventForm = () => {
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           placeholder="Enter event description"
           required
+        />
+      </div>
+
+      {/* Tags */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Tags / Topics
+        </label>
+        <div className="flex flex-wrap gap-2 mb-2">
+          {formData.tags.map((tag, idx) => (
+            <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+              {tag}
+              <button
+                type="button"
+                onClick={() => removeTag(tag)}
+                className="hover:text-blue-900"
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <input
+          type="text"
+          placeholder="Type a tag and press Enter"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              addTag(e.target.value.trim());
+              e.target.value = '';
+            }
+          }}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         />
       </div>
     </div>
@@ -318,7 +452,142 @@ const MultiStepEventForm = () => {
   const renderStep3 = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">Event Schedule & Materials</h3>
+        <h3 className="text-lg font-semibold text-gray-900">Event Speakers</h3>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addSpeaker}
+          className="flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Add Speaker
+        </Button>
+      </div>
+
+      {formData.speakers.map((speaker, index) => (
+        <div key={speaker.id} className="border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="font-medium text-gray-900">Speaker {index + 1}</h4>
+            {formData.speakers.length > 1 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => removeSpeaker(index)}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+              <input
+                type="text"
+                value={speaker.name}
+                onChange={(e) => handleSpeakerChange(index, "name", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Title/Position</label>
+              <input
+                type="text"
+                value={speaker.title}
+                onChange={(e) => handleSpeakerChange(index, "title", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Company/Organization</label>
+              <input
+                type="text"
+                value={speaker.company}
+                onChange={(e) => handleSpeakerChange(index, "company", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <input
+                type="email"
+                value={speaker.email}
+                onChange={(e) => handleSpeakerChange(index, "email", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn URL</label>
+              <input
+                type="url"
+                value={speaker.linkedin}
+                onChange={(e) => handleSpeakerChange(index, "linkedin", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Speaker Photo</label>
+              {speaker.photo ? (
+                <div className="relative inline-block">
+                  <img
+                    src={typeof speaker.photo === 'string' ? speaker.photo : URL.createObjectURL(speaker.photo)}
+                    alt={speaker.name}
+                    className="rounded-lg border border-gray-200 max-h-32 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSpeakerChange(index, "photo", null)}
+                    className="absolute top-1 right-1 bg-white hover:bg-red-100 rounded-full p-1 text-red-600 border border-red-200"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="block cursor-pointer bg-white border border-dashed border-gray-300 rounded-lg px-4 py-3 w-fit hover:border-blue-400 transition-all">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handleSpeakerChange(index, "photo", e.target.files[0])}
+                    className="hidden"
+                  />
+                  Click to upload photo
+                </label>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Bio *</label>
+              <textarea
+                value={speaker.bio}
+                onChange={(e) => handleSpeakerChange(index, "bio", e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Speaking Topics</label>
+              <input
+                type="text"
+                value={speaker.topics}
+                onChange={(e) => handleSpeakerChange(index, "topics", e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., Marine Engineering, Navigation Systems, Safety Protocols"
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderStep4 = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-gray-900">Event Schedule</h3>
         <Button
           type="button"
           variant="outline"
@@ -419,32 +688,6 @@ const MultiStepEventForm = () => {
           </div>
         </div>
       ))}
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Materials & Resources
-        </label>
-        <textarea
-          value={formData.materials}
-          onChange={(e) => handleInputChange("materials", e.target.value)}
-          rows={4}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter materials and resources needed"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Requirements
-        </label>
-        <textarea
-          value={formData.requirements}
-          onChange={(e) => handleInputChange("requirements", e.target.value)}
-          rows={3}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter participant requirements"
-        />
-      </div>
     </div>
   );
 
@@ -483,6 +726,7 @@ const MultiStepEventForm = () => {
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
         {currentStep === 3 && renderStep3()}
+        {currentStep === 4 && renderStep4()}
 
         {/* Navigation Buttons */}
         <div className="flex items-center justify-between pt-6 border-t border-gray-200">

@@ -17,7 +17,6 @@ const MultiStepTestForm = () => {
     courseName: "",
     duration: "",
     passingScore: "",
-    maxAttempts: "",
     randomizeQuestions: false,
     showResults: true,
     isActive: true,
@@ -30,6 +29,7 @@ const MultiStepTestForm = () => {
         options: ["", "", "", ""],
         correctAnswer: 0,
         points: 1,
+        image: null, // Add image field to each question
       }
     ]
   });
@@ -82,6 +82,7 @@ const MultiStepTestForm = () => {
       options: ["", "", "", ""],
       correctAnswer: 0,
       points: 1,
+      image: null, // Add image field to each question
     };
     setFormData(prev => ({
       ...prev,
@@ -192,20 +193,6 @@ const MultiStepTestForm = () => {
             required
             min="0"
             max="100"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Maximum Attempts
-          </label>
-          <input
-            type="number"
-            value={formData.maxAttempts}
-            onChange={(e) => handleInputChange("maxAttempts", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="e.g., 3 (0 for unlimited)"
-            min="0"
           />
         </div>
       </div>
@@ -377,18 +364,55 @@ const MultiStepTestForm = () => {
                 </div>
 
                  <div className="space-y-3">
-                   <div>
-                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                       Question Text *
-                     </label>
-                     <textarea
-                       value={question.question}
-                       onChange={(e) => handleQuestionChange(actualIndex, "question", e.target.value)}
-                       rows={2}
-                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                       placeholder="Enter your question here"
-                       required
-                     />
+                   {/* Question and Image Row */}
+                   <div className="flex flex-col md:flex-row gap-6 items-start">
+                     {/* Question Text */}
+                     <div className="flex-1 w-full">
+                       <label className="block text-sm font-medium text-gray-700 mb-1.5">Question Text *</label>
+                       <textarea
+                         value={question.question}
+                         onChange={(e) => handleQuestionChange(actualIndex, "question", e.target.value)}
+                         rows={2}
+                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                         placeholder="Enter your question here"
+                         required
+                       />
+                     </div>
+                     {/* Image Upload Section */}
+                     <div className="flex flex-col items-center gap-2 w-full md:w-[240px] max-w-xs min-w-[180px]">
+                       <label className="block text-sm font-semibold text-gray-700 mb-1 mt-1 md:mt-0">Question Image <span className="font-normal text-xs text-gray-400">(optional)</span></label>
+                       {question.image ? (
+                         <div className="relative group mt-1 flex flex-col items-center">
+                           <img
+                             src={typeof question.image === 'string' ? question.image : URL.createObjectURL(question.image)}
+                             alt="Question img"
+                             className="rounded-xl border border-gray-200 max-h-40 min-h-[120px] max-w-[220px] object-contain shadow-md transition-all"
+                             style={{ background: '#f5f6fa' }}
+                           />
+                           <button
+                             type="button"
+                             onClick={() => handleQuestionChange(actualIndex, "image", null)}
+                             className="absolute top-1 right-1 bg-white bg-opacity-90 hover:bg-red-100 rounded-full p-1 text-red-600 border border-red-200 shadow opacity-85 hover:opacity-100 transition-all"
+                             title="Remove image"
+                           >
+                             <Trash2 className="w-4 h-4" />
+                           </button>
+                         </div>
+                       ) : (
+                         <label className="block w-full cursor-pointer mt-2 bg-white border border-dashed border-gray-300 rounded-xl px-3 py-6 min-h-[140px] flex flex-col items-center justify-center text-base text-center text-gray-500 hover:border-blue-400 transition-all group">
+                           <span className="block text-base font-medium">Click or drag to upload</span>
+                           <input
+                             type="file"
+                             accept="image/*"
+                             onChange={e => {
+                               const file = e.target.files && e.target.files[0];
+                               handleQuestionChange(actualIndex, "image", file || null);
+                             }}
+                             className="hidden"
+                           />
+                         </label>
+                       )}
+                     </div>
                    </div>
 
                    <div className="space-y-2">

@@ -1,0 +1,347 @@
+export const instructorDashboardSummary = {
+  metrics: [
+    {
+      label: "Active Courses",
+      value: 6,
+      trend: "+2 this quarter",
+      color: "text-blue-600",
+      icon: "📘",
+    },
+    {
+      label: "Enrolled Students",
+      value: 128,
+      trend: "+14 this month",
+      color: "text-green-600",
+      icon: "👥",
+    },
+    {
+      label: "Average Test Score",
+      value: "87%",
+      trend: "+4% vs previous term",
+      color: "text-purple-600",
+      icon: "📊",
+    },
+    {
+      label: "Upcoming Sessions",
+      value: 5,
+      trend: "Next 7 days",
+      color: "text-orange-600",
+      icon: "🗓️",
+    },
+  ],
+  upcomingSessions: [
+    {
+      id: "session-1",
+      title: "Advanced Navigation Systems",
+      course: "Navigation Systems & GPS",
+      date: "2025-11-12T09:00:00Z",
+      modality: "Hybrid",
+      location: "Norfolk Naval Base",
+      students: 24,
+    },
+    {
+      id: "session-2",
+      title: "Bridge Team Simulation Lab",
+      course: "Maritime Security Operations",
+      date: "2025-11-14T13:00:00Z",
+      modality: "Onsite",
+      location: "BVT Simulation Center",
+      students: 18,
+    },
+    {
+      id: "session-3",
+      title: "Tactics & Rules of Engagement Review",
+      course: "Maritime Security Operations",
+      date: "2025-11-16T10:00:00Z",
+      modality: "Virtual",
+      location: "Teams Meeting",
+      students: 32,
+    },
+  ],
+  studentHighlights: [
+    {
+      id: "student-1",
+      name: "Lt. Marcus Allen",
+      course: "Navigation Systems & GPS",
+      progress: 92,
+      status: "On Track",
+    },
+    {
+      id: "student-2",
+      name: "Ens. Priya Sharma",
+      course: "Maritime Security Operations",
+      progress: 78,
+      status: "Needs Review",
+    },
+    {
+      id: "student-3",
+      name: "Lt. Cmdr. Ethan Brooks",
+      course: "Submarine Operations Masterclass",
+      progress: 88,
+      status: "On Track",
+    },
+  ],
+  announcements: [
+    {
+      id: "announcement-1",
+      title: "Assessment Blueprint Update",
+      message:
+        "New question bank released for Maritime Safety certifications. Review before next test cycle.",
+      date: "2025-11-08",
+    },
+    {
+      id: "announcement-2",
+      title: "Instructor Forum",
+      message:
+        "Join the monthly instructor round-table on Friday at 1400 hrs. RSVP requested.",
+      date: "2025-11-07",
+    },
+  ],
+};
+
+export const instructorCourses = [
+  {
+    id: "crs-001",
+    title: "Navigation Systems & GPS",
+    code: "NAV-302",
+    students: 42,
+    status: "In Progress",
+    level: "Intermediate",
+    startDate: "2025-10-21",
+    endDate: "2025-12-15",
+    modality: "Hybrid",
+    progress: 68,
+  },
+  {
+    id: "crs-002",
+    title: "Maritime Security Operations",
+    code: "MSO-410",
+    students: 36,
+    status: "Upcoming",
+    level: "Advanced",
+    startDate: "2025-11-18",
+    endDate: "2026-01-09",
+    modality: "Onsite",
+    progress: 0,
+  },
+  {
+    id: "crs-003",
+    title: "Bridge Resource Management",
+    code: "BRM-220",
+    students: 28,
+    status: "Completed",
+    level: "Intermediate",
+    startDate: "2025-08-05",
+    endDate: "2025-09-30",
+    modality: "Online",
+    progress: 100,
+  },
+  {
+    id: "crs-004",
+    title: "Electronic Warfare Fundamentals",
+    code: "EWF-505",
+    students: 22,
+    status: "In Progress",
+    level: "Advanced",
+    startDate: "2025-09-12",
+    endDate: "2025-12-05",
+    modality: "Onsite",
+    progress: 54,
+  },
+  {
+    id: "crs-005",
+    title: "Submarine Operations Masterclass",
+    code: "SUB-610",
+    students: 16,
+    status: "In Progress",
+    level: "Expert",
+    startDate: "2025-10-01",
+    endDate: "2026-01-30",
+    modality: "Hybrid",
+    progress: 41,
+  },
+];
+
+export const instructorTests = [
+  {
+    id: "test-001",
+    title: "GPS Navigation Competency Check",
+    courseId: "crs-001",
+    courseTitle: "Navigation Systems & GPS",
+    status: "Published",
+    scheduledDate: "2025-11-20T14:00:00Z",
+    attempts: 42,
+    averageScore: 84,
+    passingScore: 70,
+  },
+  {
+    id: "test-002",
+    title: "Bridge Simulation Scenario Evaluation",
+    courseId: "crs-003",
+    courseTitle: "Bridge Resource Management",
+    status: "Draft",
+    scheduledDate: null,
+    attempts: 28,
+    averageScore: 91,
+    passingScore: 75,
+  },
+  {
+    id: "test-003",
+    title: "Electronic Countermeasures Practical",
+    courseId: "crs-004",
+    courseTitle: "Electronic Warfare Fundamentals",
+    status: "Published",
+    scheduledDate: "2025-12-02T09:30:00Z",
+    attempts: 18,
+    averageScore: 79,
+    passingScore: 80,
+  },
+];
+
+export const courseDetailById = {
+  "crs-001": {
+    overview: {
+      description:
+        "Comprehensive study of modern navigation systems with emphasis on GPS integration, redundancy, and failure protocols for naval operations.",
+      objectives: [
+        "Configure and validate GPS navigation suites aboard naval vessels",
+        "Interpret advanced positional data and error correction techniques",
+        "Execute navigation contingency plans under degraded environments",
+      ],
+      resources: [
+        {
+          id: "res-1",
+          name: "Navigation Systems Manual (Rev 4)",
+          type: "Document",
+          link: "#",
+        },
+        {
+          id: "res-2",
+          name: "Bridge Simulator Checklist",
+          type: "Checklist",
+          link: "#",
+        },
+      ],
+    },
+    students: [
+      {
+        id: "st-001",
+        name: "Lt. Marcus Allen",
+        rank: "Lieutenant",
+        progress: 92,
+        attendance: "96%",
+        lastActive: "2025-11-09T12:30:00Z",
+        status: "On Track",
+      },
+      {
+        id: "st-002",
+        name: "Ens. Priya Sharma",
+        rank: "Ensign",
+        progress: 78,
+        attendance: "88%",
+        lastActive: "2025-11-08T10:15:00Z",
+        status: "Needs Review",
+      },
+      {
+        id: "st-003",
+        name: "Lt. Cmdr. Ethan Brooks",
+        rank: "Lieutenant Commander",
+        progress: 88,
+        attendance: "100%",
+        lastActive: "2025-11-09T16:40:00Z",
+        status: "On Track",
+      },
+      {
+        id: "st-004",
+        name: "Lt. Naomi Fitzgerald",
+        rank: "Lieutenant",
+        progress: 65,
+        attendance: "82%",
+        lastActive: "2025-11-06T09:05:00Z",
+        status: "Watch List",
+      },
+    ],
+    schedule: [
+      {
+        id: "sch-1",
+        topic: "Satellite Geometry & Error Sources",
+        date: "2025-11-12T09:00:00Z",
+        duration: "2h",
+        location: "Navigation Lab 3B",
+        modality: "Hybrid",
+      },
+      {
+        id: "sch-2",
+        topic: "Bridge SIM Scenario • Heavy Weather Approach",
+        date: "2025-11-14T14:00:00Z",
+        duration: "3h",
+        location: "Simulation Suite",
+        modality: "Onsite",
+      },
+      {
+        id: "sch-3",
+        topic: "Failsafe Protocol Workshop",
+        date: "2025-11-18T10:00:00Z",
+        duration: "90m",
+        location: "Teams Meeting",
+        modality: "Virtual",
+      },
+    ],
+    tests: instructorTests.filter((test) => test.courseId === "crs-001"),
+  },
+};
+
+export const instructorQueries = [
+  {
+    id: "qry-001",
+    studentName: "Lt. Marcus Allen",
+    studentEmail: "marcus.allen@navy.mil",
+    course: "Navigation Systems & GPS",
+    subject: "Clarification on satellite drift calculations",
+    priority: "High",
+    status: "Open",
+    lastUpdated: "2025-11-10T13:20:00Z",
+    assignedInstructor: "Commander Sarah Johnson",
+    messages: [
+      {
+        id: "msg-001",
+        authorRole: "student",
+        authorName: "Lt. Marcus Allen",
+        timestamp: "2025-11-10T09:15:00Z",
+        content:
+          "Good morning, ma'am. Could you please clarify how we compensate for satellite drift when plotting an approach in heavy weather?",
+      },
+      {
+        id: "msg-002",
+        authorRole: "admin",
+        authorName: "Commander Sarah Johnson",
+        timestamp: "2025-11-10T12:05:00Z",
+        content:
+          "Great question, Marcus. We will cover this in tomorrow's lab, but I'll share an excerpt from the manual shortly.",
+      },
+    ],
+  },
+  {
+    id: "qry-003",
+    studentName: "Lt. Naomi Fitzgerald",
+    studentEmail: "naomi.fitzgerald@navy.mil",
+    course: "Navigation Systems & GPS",
+    subject: "Simulator login issue",
+    priority: "Critical",
+    status: "In Progress",
+    lastUpdated: "2025-11-11T08:05:00Z",
+    assignedInstructor: "Commander Sarah Johnson",
+    messages: [
+      {
+        id: "msg-005",
+        authorRole: "student",
+        authorName: "Lt. Naomi Fitzgerald",
+        timestamp: "2025-11-11T07:48:00Z",
+        content:
+          "I'm unable to authenticate into the submerged maneuver simulator. It errors with 'token expired'.",
+      },
+    ],
+  },
+];
+
+
