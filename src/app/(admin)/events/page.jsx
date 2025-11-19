@@ -15,18 +15,6 @@ export default function EventsPage() {
       icon: Calendar,
       component: EventsTable
     },
-    {
-      id: "attendees",
-      label: "Attendees",
-      icon: Users,
-      component: () => <div className="text-center py-8 text-gray-500">Attendees management coming soon...</div>
-    },
-    {
-      id: "locations",
-      label: "Locations",
-      icon: MapPin,
-      component: () => <div className="text-center py-8 text-gray-500">Locations management coming soon...</div>
-    }
   ];
 
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component;

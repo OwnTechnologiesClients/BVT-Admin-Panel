@@ -5,6 +5,7 @@ import { useSidebar } from "@/context/SidebarContext";
 import AppHeader from "@/layout/AppHeader";
 import AppSidebar from "@/layout/AppSidebar";
 import Backdrop from "@/layout/Backdrop";
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
 
 export default function AdminLayout({ children }) {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
@@ -17,6 +18,7 @@ export default function AdminLayout({ children }) {
     : "lg:ml-[90px]";
 
   return (
+    <ProtectedRoute allowedRoles={["admin"]}>
     <div className="min-h-screen xl:flex">
       {/* Sidebar and Backdrop */}
       <AppSidebar />
@@ -31,5 +33,6 @@ export default function AdminLayout({ children }) {
         <div className="p-4 mx-auto max-w-7xl md:p-6">{children}</div>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

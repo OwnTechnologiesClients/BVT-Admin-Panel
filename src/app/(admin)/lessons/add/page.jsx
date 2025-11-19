@@ -1,51 +1,71 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import * as courseAPI from "@/lib/api/course";
+import * as chapterAPI from "@/lib/api/chapter";
+import * as lessonAPI from "@/lib/api/lesson";
 
 export default function AddLessonPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     courseId: "",
     chapterId: "",
     title: "",
-    order: 1,
-    isActive: true,
+    description: "",
+    status: "active",
     isFree: false
   });
 
   const [errors, setErrors] = useState({});
+  const [courses, setCourses] = useState([]);
+  const [chapters, setChapters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Courses data
-  const courses = [
-    { id: 1, name: "Advanced Naval Engineering Workshop" },
-    { id: 2, name: "Maritime Security Operations" },
-    { id: 3, name: "Submarine Operations Masterclass" }
-  ];
+  // Fetch courses
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setLoading(true);
+        const response = await courseAPI.getAllCourses({ limit: 100 });
+        if (response.success) {
+          setCourses(response.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching courses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // Chapters data with course reference
-  const chapters = [
-    { id: 1, name: "Getting Started", courseId: 1 },
-    { id: 2, name: "Ship Propulsion Systems", courseId: 1 },
-    { id: 3, name: "Advanced Propulsion", courseId: 1 },
-    { id: 4, name: "Security Fundamentals", courseId: 2 },
-    { id: 5, name: "Threat Assessment", courseId: 2 },
-    { id: 6, name: "Introduction to Submarines", courseId: 3 },
-    { id: 7, name: "Underwater Navigation", courseId: 3 }
-  ];
+    fetchCourses();
+  }, []);
 
-  // Filter chapters based on selected course
-  const filteredChapters = formData.courseId 
-    ? chapters.filter(chapter => chapter.courseId === parseInt(formData.courseId))
-    : [];
+  // Fetch chapters when course is selected
+  useEffect(() => {
+    const fetchChapters = async () => {
+      if (!formData.courseId) {
+        setChapters([]);
+        return;
+      }
 
-  const lessonTypes = [
-    { value: "lecture", label: "Lecture" },
-    { value: "practical", label: "Practical" },
-    { value: "workshop", label: "Workshop" },
-    { value: "assessment", label: "Assessment" }
-  ];
+      try {
+        const response = await chapterAPI.getChaptersByCourse(formData.courseId);
+        if (response.success) {
+          setChapters(response.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching chapters:', err);
+        setChapters([]);
+      }
+    };
+
+    fetchChapters();
+  }, [formData.courseId]);
 
   const handleInputChange = (field, value) => {
     // Reset chapter selection when course changes
@@ -90,13 +110,33 @@ export default function AddLessonPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      console.log("Lesson submitted:", formData);
-      // Handle form submission here
-      alert("Lesson created successfully!");
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await lessonAPI.createLesson({
+        courseId: formData.courseId,
+        chapterId: formData.chapterId,
+        title: formData.title.trim(),
+        description: formData.description?.trim() || "",
+        isActive: formData.status === "active",
+        isFree: formData.isFree
+      });
+
+      if (response.success) {
+        router.push('/lessons');
+      } else {
+        alert(response.message || 'Failed to create lesson');
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to create lesson');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -105,15 +145,19 @@ export default function AddLessonPage() {
       <PageBreadcrumb 
         pageTitle="Add Lesson"
         breadcrumbs={[
-          { label: "Home", href: "/admin/dashboard" },
-          { label: "Lessons", href: "/admin/lessons" },
-          { label: "Add Lesson", href: "/admin/lessons/add" }
+          { label: "Home", href: "/" },
+          { label: "Lessons", href: "/lessons" },
+          { label: "Add Lesson", href: "/lessons/add" }
         ]}
       />
 
       {/* Header Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          className="flex items-center gap-2"
+          onClick={() => router.back()}
+        >
           <ArrowLeft className="w-4 h-4" />
           Back to Lessons
         </Button>
@@ -121,13 +165,18 @@ export default function AddLessonPage() {
 
       {/* Form */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Left Column */}
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Course *
+                  Course <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.courseId}
@@ -138,8 +187,8 @@ export default function AddLessonPage() {
                 >
                   <option value="">Select a course</option>
                   {courses.map(course => (
-                    <option key={course.id} value={course.id}>
-                      {course.name}
+                      <option key={course._id} value={course._id}>
+                        {course.title}
                     </option>
                   ))}
                 </select>
@@ -148,7 +197,7 @@ export default function AddLessonPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Chapter *
+                  Chapter <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.chapterId}
@@ -161,21 +210,21 @@ export default function AddLessonPage() {
                   <option value="">
                     {formData.courseId ? "Select a chapter" : "Select a course first"}
                   </option>
-                  {filteredChapters.map(chapter => (
-                    <option key={chapter.id} value={chapter.id}>
-                      {chapter.name}
+                    {chapters.map(chapter => (
+                      <option key={chapter._id} value={chapter._id}>
+                        {chapter.title}
                     </option>
                   ))}
                 </select>
                 {errors.chapterId && <p className="text-red-500 text-sm mt-1">{errors.chapterId}</p>}
-              </div>
+                  {formData.courseId && chapters.length === 0 && (
+                    <p className="text-gray-500 text-sm mt-1">No chapters available for this course</p>
+                  )}
             </div>
 
-            {/* Right Column */}
-            <div className="space-y-6">
             <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Lesson Title *
+                  Lesson Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -188,31 +237,36 @@ export default function AddLessonPage() {
                 />
                 {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Order
-                </label>
-                <input
-                  type="number"
-                  value={formData.order}
-                  onChange={(e) => handleInputChange("order", parseInt(e.target.value))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  min="1"
-                />
-              </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description <span className="text-gray-400 text-xs">(optional)</span>
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => handleInputChange("description", e.target.value)}
+                    rows={8}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter lesson description (optional)"
+                  />
+                </div>
 
               <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => handleInputChange("isActive", e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                    Active Lesson
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Status <span className="text-gray-400 text-xs">(optional)</span>
                   </label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => handleInputChange("status", e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -224,7 +278,7 @@ export default function AddLessonPage() {
                     className="rounded"
                   />
                   <label htmlFor="isFree" className="text-sm font-medium text-gray-700">
-                    Free Lesson
+                    Free Lesson <span className="text-gray-400 text-xs">(optional)</span>
                   </label>
                 </div>
               </div>
@@ -233,15 +287,35 @@ export default function AddLessonPage() {
 
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button type="button" variant="outline">
+              <Button 
+                type="button" 
+                variant="outline"
+                onClick={() => router.back()}
+                disabled={submitting}
+              >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex items-center gap-2">
+              <Button 
+                type="submit" 
+                variant="primary" 
+                className="flex items-center gap-2"
+                disabled={submitting}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
               <Save className="w-4 h-4" />
               Create Lesson
+                  </>
+                )}
             </Button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

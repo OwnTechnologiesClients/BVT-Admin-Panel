@@ -1,90 +1,69 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import DataTable from "@/components/common/DataTable";
+import * as courseAPI from "@/lib/api/course";
 
 const CoursesTable = () => {
-  const courses = [
-    {
-      id: 1,
-      title: "Advanced Naval Engineering Workshop",
-      instructor: "Commander James Rodriguez",
-      students: 15,
-      status: "Active",
-      type: "Offline",
-      category: "Marine Engineering",
-      duration: "5 days",
-      price: "$2,500",
-      difficulty: "Advanced",
-      createdAt: "2024-01-15"
-    },
-    {
-      id: 2,
-      title: "Maritime Security Operations",
-      instructor: "Captain Michael Thompson",
-      students: 12,
-      status: "Active",
-      type: "Offline",
-      category: "Maritime Safety",
-      duration: "3 days",
-      price: "$1,800",
-      difficulty: "Intermediate",
-      createdAt: "2024-01-20"
-    },
-    {
-      id: 3,
-      title: "Submarine Operations Masterclass",
-      instructor: "Commander Lisa Chen",
-      students: 8,
-      status: "Active",
-      type: "Offline",
-      category: "Submarine Operations",
-      duration: "7 days",
-      price: "$3,200",
-      difficulty: "Advanced",
-      createdAt: "2024-01-25"
-    },
-    {
-      id: 4,
-      title: "Marine Engineering Fundamentals",
-      instructor: "Commander Sarah Johnson",
-      students: 150,
-      status: "Active",
-      type: "Online",
-      category: "Marine Engineering",
-      duration: "8 weeks",
-      price: "$800",
-      difficulty: "Beginner",
-      createdAt: "2024-02-01"
-    },
-    {
-      id: 5,
-      title: "Naval Architecture Principles",
-      instructor: "Captain David Wilson",
-      students: 25,
-      status: "Draft",
-      type: "Online",
-      category: "Marine Engineering",
-      duration: "6 weeks",
-      price: "$1,200",
-      difficulty: "Intermediate",
-      createdAt: "2024-02-05"
-    },
-    {
-      id: 6,
-      title: "Navigation Systems & GPS",
-      instructor: "Lieutenant Commander Alex Brown",
-      students: 45,
-      status: "Active",
-      type: "Hybrid",
-      category: "Navigation",
-      duration: "4 weeks",
-      price: "$1,500",
-      difficulty: "Intermediate",
-      createdAt: "2024-02-10"
+  const router = useRouter();
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState({
+    totalCourses: 0,
+    activeCourses: 0,
+    totalStudents: 0,
+    avgPrice: 0
+  });
+
+  // Fetch courses
+  const fetchCourses = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await courseAPI.getAllCourses({ limit: 100 });
+      if (response.success) {
+        setCourses(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching courses:', err);
+      setError(err.message || 'Failed to fetch courses');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  // Format course data for display
+  const formatCourses = (courses) => {
+    return courses.map(course => {
+      const instructor = course.instructor?.userId || {};
+      const instructorName = instructor.firstName && instructor.lastName
+        ? `${instructor.firstName} ${instructor.lastName}`
+        : instructor.username || 'N/A';
+      
+      return {
+        id: course._id,
+        title: course.title,
+        instructor: instructorName,
+        students: 0, // This would need to come from enrollment data
+        status: course.status || 'draft',
+        type: course.isOnline ? 'Online' : 'Offline',
+        category: course.category?.name || 'N/A',
+        duration: course.duration || 'N/A',
+        price: `$${course.price || 0}`,
+        difficulty: course.level || 'beginner',
+        createdAt: course.createdAt
+      };
+    });
+  };
+
+  const formattedCourses = formatCourses(courses);
 
   const columns = [
     {
@@ -127,11 +106,12 @@ const CoursesTable = () => {
       label: "Status",
       render: (value) => {
         const colors = {
-          "Active": "success",
-          "Draft": "warning",
-          "Inactive": "error"
+          "active": "success",
+          "draft": "warning",
+          "inactive": "error"
         };
-        return <Badge color={colors[value] || "default"}>{value}</Badge>;
+        const displayValue = value.charAt(0).toUpperCase() + value.slice(1);
+        return <Badge color={colors[value] || "default"}>{displayValue}</Badge>;
       }
     },
     {
@@ -150,7 +130,7 @@ const CoursesTable = () => {
     {
       key: "status",
       label: "Status",
-      options: ["Active", "Draft", "Inactive"]
+      options: ["active", "draft", "inactive"]
     },
     {
       key: "type",
@@ -159,17 +139,17 @@ const CoursesTable = () => {
     }
   ];
 
-  const stats = [
+  const computedStats = [
     {
       label: "Total Courses",
-      value: courses.length,
+      value: formattedCourses.length,
       icon: "C",
       bgColor: "bg-blue-100",
       iconColor: "text-blue-600"
     },
     {
       label: "Active Courses",
-      value: courses.filter(c => c.status === "Active").length,
+      value: formattedCourses.filter(c => c.status === "active").length,
       icon: "✓",
       bgColor: "bg-green-100",
       iconColor: "text-green-600",
@@ -177,14 +157,16 @@ const CoursesTable = () => {
     },
     {
       label: "Total Students",
-      value: courses.reduce((sum, course) => sum + course.students, 0),
+      value: formattedCourses.reduce((sum, course) => sum + course.students, 0),
       icon: "👥",
       bgColor: "bg-purple-100",
       iconColor: "text-purple-600"
     },
     {
       label: "Avg. Price",
-      value: `$${Math.round(courses.reduce((sum, course) => sum + parseInt(course.price.replace('$', '')), 0) / courses.length)}`,
+      value: formattedCourses.length > 0
+        ? `$${Math.round(formattedCourses.reduce((sum, course) => sum + parseInt(course.price.replace('$', '') || 0), 0) / formattedCourses.length)}`
+        : "$0",
       icon: "$",
       bgColor: "bg-yellow-100",
       iconColor: "text-yellow-600"
@@ -192,31 +174,54 @@ const CoursesTable = () => {
   ];
 
   const handleAdd = () => {
-    window.location.href = "/admin/courses/add";
+    router.push("/courses/add");
   };
 
   const handleEdit = (course) => {
-    window.location.href = `/admin/courses/update/${course.id}`;
+    router.push(`/courses/update/${course.id}`);
   };
 
-  const handleDelete = (course) => {
+  const handleDelete = async (course) => {
     if (confirm(`Are you sure you want to delete "${course.title}"?`)) {
-      console.log("Delete course:", course);
+      try {
+        const response = await courseAPI.deleteCourse(course.id);
+        if (response.success) {
+          await fetchCourses();
+        }
+      } catch (err) {
+        alert(err.message || 'Failed to delete course');
+      }
     }
   };
 
   const handleView = (course) => {
-    window.location.href = `/admin/courses/details/${course.id}`;
+    router.push(`/courses/details/${course.id}`);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-600">Loading courses...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <DataTable
       title="Courses Management"
       description="Manage and monitor all training courses"
-      data={courses}
+      data={formattedCourses}
       columns={columns}
       filters={filters}
-      stats={stats}
+      stats={computedStats}
       searchPlaceholder="Search courses by title or instructor..."
       onAdd={handleAdd}
       onEdit={handleEdit}

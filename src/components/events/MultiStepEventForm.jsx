@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Switch } from "@/components/ui";
-import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Calendar, MapPin, Users, Clock } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Calendar, MapPin, Users, Clock, Loader2 } from "lucide-react";
+import * as eventAPI from "@/lib/api/event";
+import * as categoryAPI from "@/lib/api/courseCategory";
 
-const MultiStepEventForm = () => {
+const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     // Step 1: Basic Information
     title: "",
@@ -56,6 +63,60 @@ const MultiStepEventForm = () => {
   });
 
   const totalSteps = 4;
+
+  // Fetch categories and initial data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch categories
+        const categoriesResponse = await categoryAPI.getAllCategories({ limit: 100 });
+        if (categoriesResponse.success) {
+          setCategories(categoriesResponse.data || []);
+        }
+
+        // If editing, fetch event data
+        if (isEdit && initialData?.id) {
+          setLoading(true);
+          const eventResponse = await eventAPI.getEventById(initialData.id);
+          if (eventResponse.success) {
+            const event = eventResponse.data;
+            setFormData({
+              title: event.title || "",
+              description: event.description || "",
+              eventType: event.eventType || "",
+              category: event.category?._id || event.category || "",
+              maxAttendees: event.maxAttendees?.toString() || "",
+              isOnline: event.isOnline || false,
+              eventImage: event.eventImage || null,
+              tags: event.tags || [],
+              startDate: event.startDate ? new Date(event.startDate).toISOString().split('T')[0] : "",
+              endDate: event.endDate ? new Date(event.endDate).toISOString().split('T')[0] : "",
+              startTime: event.startTime || "",
+              endTime: event.endTime || "",
+              location: event.location || "",
+              onlineLink: event.onlineLink || "",
+              registrationDeadline: event.registrationDeadline ? new Date(event.registrationDeadline).toISOString().slice(0, 16) : "",
+              cost: event.cost?.toString() || "",
+              speakers: event.speakers && event.speakers.length > 0 
+                ? event.speakers.map((s, idx) => ({ ...s, id: s.id || s._id || idx + 1 }))
+                : [{ id: 1, name: "", bio: "", company: "", title: "", photo: null, email: "", linkedin: "", topics: "" }],
+              agenda: event.agenda && event.agenda.length > 0
+                ? event.agenda.map((a, idx) => ({ ...a, id: a.id || a._id || idx + 1 }))
+                : [{ id: 1, time: "", title: "", description: "", speaker: "", duration: "" }]
+            });
+          }
+        } else if (initialData) {
+          // Use provided initial data
+          setFormData(prev => ({ ...prev, ...initialData }));
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [isEdit, initialData]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -151,22 +212,148 @@ const MultiStepEventForm = () => {
     }));
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     }
   };
 
-  const prevStep = () => {
+  const prevStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Event submitted:", formData);
-    // Handle form submission here
+    
+    try {
+      setSubmitting(true);
+      
+      // Check if there are any image uploads
+      const hasEventImage = formData.eventImage && formData.eventImage instanceof File;
+      const hasSpeakerPhotos = formData.speakers.some(s => s.photo && s.photo instanceof File);
+      const hasImageUploads = hasEventImage || hasSpeakerPhotos;
+      
+      // Prepare speakers data (excluding File objects, they'll be added separately)
+      const speakersData = formData.speakers.map(speaker => ({
+        name: speaker.name.trim(),
+        bio: speaker.bio?.trim() || "",
+        company: speaker.company?.trim() || "",
+        title: speaker.title?.trim() || "",
+        photo: speaker.photo && typeof speaker.photo === 'string' ? speaker.photo : null, // Keep existing photo URL if not a File
+        email: speaker.email?.trim() || "",
+        linkedin: speaker.linkedin?.trim() || "",
+        topics: speaker.topics?.trim() || ""
+      }));
+      
+      // Prepare agenda data
+      const agendaData = formData.agenda.map(item => ({
+        time: item.time?.trim() || "",
+        title: item.title.trim(),
+        description: item.description?.trim() || "",
+        speaker: item.speaker?.trim() || "",
+        duration: item.duration?.trim() || ""
+      }));
+      
+      let eventData;
+      
+      if (hasImageUploads) {
+        // Use FormData if there are image uploads
+        eventData = new FormData();
+        eventData.append('title', formData.title.trim());
+        eventData.append('description', formData.description.trim());
+        eventData.append('eventType', formData.eventType);
+        eventData.append('category', formData.category);
+        if (formData.maxAttendees) {
+          eventData.append('maxAttendees', parseInt(formData.maxAttendees));
+        }
+        eventData.append('isOnline', formData.isOnline);
+        eventData.append('startDate', formData.startDate);
+        eventData.append('endDate', formData.endDate);
+        if (formData.startTime) {
+          eventData.append('startTime', formData.startTime);
+        }
+        if (formData.endTime) {
+          eventData.append('endTime', formData.endTime);
+        }
+        if (!formData.isOnline && formData.location) {
+          eventData.append('location', formData.location);
+        }
+        if (formData.isOnline && formData.onlineLink) {
+          eventData.append('onlineLink', formData.onlineLink);
+        }
+        if (formData.registrationDeadline) {
+          eventData.append('registrationDeadline', formData.registrationDeadline);
+        }
+        eventData.append('cost', formData.cost ? parseFloat(formData.cost) : 0);
+        eventData.append('tags', JSON.stringify(formData.tags || []));
+        eventData.append('speakers', JSON.stringify(speakersData));
+        eventData.append('agenda', JSON.stringify(agendaData));
+        
+        // Append eventImage if it's a File
+        if (hasEventImage) {
+          eventData.append('eventImage', formData.eventImage);
+        } else if (formData.eventImage && typeof formData.eventImage === 'string') {
+          // Keep existing image URL if not a File
+          eventData.append('eventImage', formData.eventImage);
+        }
+        
+        // Append speaker photos with proper fieldnames
+        formData.speakers.forEach((speaker, index) => {
+          if (speaker.photo && speaker.photo instanceof File) {
+            eventData.append(`speakerPhoto[${index}]`, speaker.photo);
+          }
+        });
+      } else {
+        // Use plain object if no image uploads
+        eventData = {
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          eventType: formData.eventType,
+          category: formData.category,
+          maxAttendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : undefined,
+          isOnline: formData.isOnline,
+          eventImage: formData.eventImage && typeof formData.eventImage === 'string' ? formData.eventImage : null,
+          startDate: formData.startDate,
+          endDate: formData.endDate,
+          startTime: formData.startTime || undefined,
+          endTime: formData.endTime || undefined,
+          location: formData.isOnline ? undefined : formData.location,
+          onlineLink: formData.isOnline ? formData.onlineLink : undefined,
+          registrationDeadline: formData.registrationDeadline || undefined,
+          cost: formData.cost ? parseFloat(formData.cost) : 0,
+          tags: formData.tags || [],
+          speakers: speakersData,
+          agenda: agendaData
+        };
+      }
+
+      let response;
+      if (isEdit && initialData?.id) {
+        response = await eventAPI.updateEvent(initialData.id, eventData);
+      } else {
+        response = await eventAPI.createEvent(eventData);
+      }
+      
+      if (response.success) {
+        router.push('/events');
+      } else {
+        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} event`);
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to create event');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -209,7 +396,7 @@ const MultiStepEventForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Event Title *
+            Event Title <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -223,7 +410,7 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Event Type *
+            Event Type <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.eventType}
@@ -242,7 +429,7 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Category *
+            Category <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.category}
@@ -251,17 +438,17 @@ const MultiStepEventForm = () => {
             required
           >
             <option value="">Select category</option>
-            <option value="marine-engineering">Marine Engineering</option>
-            <option value="navigation">Navigation</option>
-            <option value="maritime-safety">Maritime Safety</option>
-            <option value="naval-operations">Naval Operations</option>
-            <option value="submarine-operations">Submarine Operations</option>
+            {categories.map(category => (
+              <option key={category._id} value={category._id}>
+                {category.name}
+              </option>
+            ))}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Maximum Attendees
+            Maximum Attendees <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <input
             type="number"
@@ -285,7 +472,7 @@ const MultiStepEventForm = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Description *
+          Description <span className="text-red-500">*</span>
         </label>
         <textarea
           value={formData.description}
@@ -339,7 +526,7 @@ const MultiStepEventForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Start Date *
+            Start Date <span className="text-red-500">*</span>
           </label>
           <input
             type="date"
@@ -352,7 +539,7 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            End Date *
+            End Date <span className="text-red-500">*</span>
           </label>
           <input
             type="date"
@@ -365,7 +552,7 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Start Time *
+            Start Time <span className="text-red-500">*</span>
           </label>
           <input
             type="time"
@@ -378,7 +565,7 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            End Time *
+            End Time <span className="text-red-500">*</span>
           </label>
           <input
             type="time"
@@ -392,7 +579,7 @@ const MultiStepEventForm = () => {
         {!formData.isOnline && (
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Location *
+              Location <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -408,7 +595,7 @@ const MultiStepEventForm = () => {
         {formData.isOnline && (
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Online Link *
+              Online Link <span className="text-red-500">*</span>
             </label>
             <input
               type="url"
@@ -423,7 +610,7 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Registration Deadline
+            Registration Deadline <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <input
             type="datetime-local"
@@ -435,15 +622,20 @@ const MultiStepEventForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Cost
+            Cost <span className="text-gray-400 text-xs">(optional)</span>
           </label>
-          <input
-            type="number"
-            value={formData.cost}
-            onChange={(e) => handleInputChange("cost", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter event cost"
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+            <input
+              type="number"
+              value={formData.cost}
+              onChange={(e) => handleInputChange("cost", e.target.value)}
+              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -466,7 +658,7 @@ const MultiStepEventForm = () => {
       </div>
 
       {formData.speakers.map((speaker, index) => (
-        <div key={speaker.id} className="border border-gray-200 rounded-lg p-6">
+        <div key={speaker.id || `speaker-${index}`} className="border border-gray-200 rounded-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h4 className="font-medium text-gray-900">Speaker {index + 1}</h4>
             {formData.speakers.length > 1 && (
@@ -484,7 +676,7 @@ const MultiStepEventForm = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Name <span className="text-red-500">*</span></label>
               <input
                 type="text"
                 value={speaker.name}
@@ -494,7 +686,7 @@ const MultiStepEventForm = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Title/Position</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Title/Position <span className="text-gray-400 text-xs">(optional)</span></label>
               <input
                 type="text"
                 value={speaker.title}
@@ -503,7 +695,7 @@ const MultiStepEventForm = () => {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Company/Organization</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Company/Organization <span className="text-gray-400 text-xs">(optional)</span></label>
               <input
                 type="text"
                 value={speaker.company}
@@ -512,7 +704,7 @@ const MultiStepEventForm = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email <span className="text-gray-400 text-xs">(optional)</span></label>
               <input
                 type="email"
                 value={speaker.email}
@@ -521,7 +713,7 @@ const MultiStepEventForm = () => {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn URL</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">LinkedIn URL <span className="text-gray-400 text-xs">(optional)</span></label>
               <input
                 type="url"
                 value={speaker.linkedin}
@@ -647,15 +839,20 @@ const MultiStepEventForm = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Speaker
+                Speaker <span className="text-gray-400 text-xs">(optional)</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={item.speaker}
                 onChange={(e) => handleAgendaChange(index, "speaker", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter speaker name"
-              />
+              >
+                <option value="">Select a speaker</option>
+                {formData.speakers.filter(s => s.name.trim()).map((speaker, speakerIdx) => (
+                  <option key={speaker.id || `speaker-option-${speakerIdx}`} value={speaker.name}>
+                    {speaker.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -722,7 +919,24 @@ const MultiStepEventForm = () => {
         </span>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form 
+        onSubmit={(e) => {
+          // Only submit on the last step
+          if (currentStep === totalSteps) {
+            handleSubmit(e);
+          } else {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+        onKeyDown={(e) => {
+          // Prevent Enter key from submitting form unless on last step
+          if (e.key === 'Enter' && currentStep < totalSteps) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
         {currentStep === 3 && renderStep3()}
@@ -757,9 +971,19 @@ const MultiStepEventForm = () => {
                 type="submit"
                 variant="primary"
                 className="flex items-center gap-2"
+                disabled={submitting}
               >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
                 <Save className="w-4 h-4" />
-                Create Event
+                {isEdit ? 'Update Event' : 'Create Event'}
+                  </>
+                )}
               </Button>
             )}
           </div>

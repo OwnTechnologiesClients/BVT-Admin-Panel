@@ -1,26 +1,23 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import * as categoryAPI from "@/lib/api/courseCategory";
 
 export default function AddCourseCategoryPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: "",
     slug: "",
     description: "",
-    isActive: true
+    status: "active"
   });
 
   const [errors, setErrors] = useState({});
-
-  const parentCategories = [
-    { id: "", name: "No Parent Category" },
-    { id: 1, name: "Marine Engineering" },
-    { id: 2, name: "Navigation" },
-    { id: 3, name: "Maritime Safety" }
-  ];
+  const [submitting, setSubmitting] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -65,13 +62,31 @@ export default function AddCourseCategoryPage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      console.log("Category submitted:", formData);
-      // Handle form submission here
-      alert("Category created successfully!");
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const response = await categoryAPI.createCategory({
+        name: formData.name.trim(),
+        slug: formData.slug.trim(),
+        description: formData.description.trim(),
+        isActive: formData.status === "active"
+      });
+
+      if (response.success) {
+        router.push('/course-categories');
+      } else {
+        alert(response.message || 'Failed to create category');
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to create category');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -88,7 +103,11 @@ export default function AddCourseCategoryPage() {
 
       {/* Header Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          className="flex items-center gap-2"
+          onClick={() => router.push('/course-categories')}
+        >
           <ArrowLeft className="w-4 h-4" />
           Back to Categories
         </Button>
@@ -102,7 +121,7 @@ export default function AddCourseCategoryPage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category Name *
+                  Category Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -118,7 +137,7 @@ export default function AddCourseCategoryPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category Slug *
+                  Category Slug <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -137,7 +156,7 @@ export default function AddCourseCategoryPage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description *
+                  Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={formData.description}
@@ -150,29 +169,48 @@ export default function AddCourseCategoryPage() {
                 />
                 {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
               </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="isActive"
-                  checked={formData.isActive}
-                  onChange={(e) => handleInputChange("isActive", e.target.checked)}
-                  className="rounded"
-                />
-                <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                  Active Category
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status <span className="text-gray-400 text-xs">(optional)</span>
                 </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleInputChange("status", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
               </div>
             </div>
           </div>
 
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button type="button" variant="outline">
+            <Button 
+              type="button" 
+              variant="outline"
+              onClick={() => router.push('/course-categories')}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex items-center gap-2">
-              <Save className="w-4 h-4" />
-              Create Category
+            <Button 
+              type="submit" 
+              variant="primary" 
+              className="flex items-center gap-2"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Create Category
+                </>
+              )}
             </Button>
           </div>
         </form>

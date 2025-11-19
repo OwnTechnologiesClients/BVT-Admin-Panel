@@ -1,18 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button, Switch } from "@/components/ui";
-import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Users, Award, Star, MapPin } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Users, Award, Star, MapPin, Loader2, X } from "lucide-react";
+import * as userAPI from "@/lib/api/user";
+import * as instructorAPI from "@/lib/api/instructor";
 
-const MultiStepMentorForm = () => {
+const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [instructorUsers, setInstructorUsers] = useState([]);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [formData, setFormData] = useState({
-    // Step 1: Basic Information
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    role: "mentor",
+    // Step 1: Select User and Basic Information
+    userId: "",
     department: "",
     isActive: true,
     
@@ -75,11 +81,123 @@ const MultiStepMentorForm = () => {
 
   const totalSteps = 3;
 
+  // Fetch users with instructor role
+  useEffect(() => {
+    const fetchInstructorUsers = async () => {
+      try {
+        setLoading(true);
+        const response = await userAPI.getAllUsers({ 
+          role: 'instructor',
+          status: 1,
+          limit: 100 
+        });
+        if (response.success) {
+          setInstructorUsers(response.data || []);
+        }
+
+        // If editing, fetch instructor data
+        if (isEdit && initialData?.id) {
+          const instructorResponse = await instructorAPI.getInstructorById(initialData.id);
+          if (instructorResponse.success) {
+            // Handle different response structures
+            const instructor = instructorResponse.data?.instructor || instructorResponse.data?.data || instructorResponse.data;
+            setFormData({
+              userId: instructor.userId?._id || instructor.userId || "",
+              department: instructor.department || "",
+              isActive: instructor.isActive !== undefined ? instructor.isActive : true,
+              experience: instructor.experience?.toString() || "",
+              specializations: instructor.specializations || "",
+              achievements: instructor.achievements && instructor.achievements.length > 0 
+                ? instructor.achievements.map((ach, idx) => ({
+                    id: idx + 1,
+                    title: ach.title || "",
+                    description: ach.description || "",
+                    date: ach.date ? new Date(ach.date).toISOString().split('T')[0] : "",
+                    organization: ach.organization || ""
+                  }))
+                : [{ id: 1, title: "", description: "", date: "", organization: "" }],
+              certifications: instructor.certifications && instructor.certifications.length > 0
+                ? instructor.certifications.map((cert, idx) => ({
+                    id: idx + 1,
+                    name: cert.name || "",
+                    issuer: cert.issuer || "",
+                    date: cert.date ? new Date(cert.date).toISOString().split('T')[0] : "",
+                    expiryDate: cert.expiryDate ? new Date(cert.expiryDate).toISOString().split('T')[0] : ""
+                  }))
+                : [{ id: 1, name: "", issuer: "", date: "", expiryDate: "" }],
+              rating: instructor.rating || 5,
+              locations: instructor.locations && instructor.locations.length > 0
+                ? instructor.locations.map((loc, idx) => ({
+                    id: idx + 1,
+                    name: loc.name || "",
+                    address: loc.address || "",
+                    type: loc.type || "onsite"
+                  }))
+                : [{ id: 1, name: "", address: "", type: "onsite" }],
+              teachingMethods: instructor.teachingMethods && instructor.teachingMethods.length > 0
+                ? instructor.teachingMethods.map((tm, idx) => ({
+                    id: idx + 1,
+                    method: tm.method || "",
+                    description: tm.description || ""
+                  }))
+                : [{ id: 1, method: "", description: "" }],
+              languages: instructor.languages && instructor.languages.length > 0
+                ? instructor.languages.map((lang, idx) => ({
+                    id: idx + 1,
+                    language: lang.language || "",
+                    proficiency: lang.proficiency || "native"
+                  }))
+                : [{ id: 1, language: "", proficiency: "native" }],
+              availability: instructor.availability || {
+                monday: { start: "09:00", end: "17:00", available: true },
+                tuesday: { start: "09:00", end: "17:00", available: true },
+                wednesday: { start: "09:00", end: "17:00", available: true },
+                thursday: { start: "09:00", end: "17:00", available: true },
+                friday: { start: "09:00", end: "17:00", available: true },
+                saturday: { start: "09:00", end: "13:00", available: false },
+                sunday: { start: "09:00", end: "13:00", available: false }
+              }
+            });
+            
+            // Set profile picture preview if available
+            if (instructor.userId?.profilePic) {
+              setImagePreview(instructor.userId.profilePic);
+            }
+          }
+        } else if (initialData) {
+          setFormData(prev => ({ ...prev, ...initialData }));
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInstructorUsers();
+  }, [isEdit, initialData]);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview("");
   };
 
   const handleAvailabilityChange = (day, field, value) => {
@@ -200,115 +318,325 @@ const MultiStepMentorForm = () => {
     }));
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     }
   };
 
-  const prevStep = () => {
+  const prevStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Mentor submitted:", formData);
-    // Handle form submission here
+    e.stopPropagation();
+    
+    // Only submit if we're on the last step
+    if (currentStep !== totalSteps) {
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      
+      // Validate required fields
+      if (!formData.userId || !formData.department) {
+        alert('Please select a user and department');
+        setSubmitting(false);
+        return;
+      }
+
+      // Create FormData if image is uploaded, otherwise use plain object
+      const hasImageUpload = imageFile !== null && imageFile instanceof File;
+      let instructorData;
+      
+      if (hasImageUpload) {
+        // Use FormData for file upload (like OMS pattern)
+        instructorData = new FormData();
+        instructorData.append('department', formData.department);
+        instructorData.append('isActive', formData.isActive);
+        if (formData.experience) {
+          instructorData.append('experience', parseInt(formData.experience));
+        }
+        if (formData.specializations?.trim()) {
+          instructorData.append('specializations', formData.specializations.trim());
+        }
+        if (formData.rating) {
+          instructorData.append('rating', formData.rating);
+        }
+        
+        // Stringify complex objects as JSON (backend will parse them)
+        const achievements = formData.achievements
+          .filter(ach => ach.title && ach.title.trim())
+          .map(ach => ({
+            title: ach.title.trim(),
+            description: ach.description?.trim() || undefined,
+            date: ach.date || undefined,
+            organization: ach.organization?.trim() || undefined
+          }));
+        if (achievements.length > 0) {
+          instructorData.append('achievements', JSON.stringify(achievements));
+        }
+        
+        const certifications = formData.certifications
+          .filter(cert => cert.name && cert.name.trim())
+          .map(cert => ({
+            name: cert.name.trim(),
+            issuer: cert.issuer?.trim() || undefined,
+            date: cert.date || undefined,
+            expiryDate: cert.expiryDate || undefined
+          }));
+        if (certifications.length > 0) {
+          instructorData.append('certifications', JSON.stringify(certifications));
+        }
+        
+        const locations = formData.locations
+          .filter(loc => loc.name && loc.name.trim())
+          .map(loc => ({
+            name: loc.name.trim(),
+            address: loc.address?.trim() || undefined,
+            type: loc.type || 'onsite'
+          }));
+        if (locations.length > 0) {
+          instructorData.append('locations', JSON.stringify(locations));
+        }
+        
+        const teachingMethods = formData.teachingMethods
+          .filter(tm => tm.method && tm.method.trim())
+          .map(tm => ({
+            method: tm.method.trim(),
+            description: tm.description?.trim() || undefined
+          }));
+        if (teachingMethods.length > 0) {
+          instructorData.append('teachingMethods', JSON.stringify(teachingMethods));
+        }
+        
+        const languages = formData.languages
+          .filter(lang => lang.language && lang.language.trim())
+          .map(lang => ({
+            language: lang.language.trim(),
+            proficiency: lang.proficiency || 'native'
+          }));
+        if (languages.length > 0) {
+          instructorData.append('languages', JSON.stringify(languages));
+        }
+        
+        // Append availability as JSON
+        instructorData.append('availability', JSON.stringify(formData.availability));
+        
+        // Append profile picture file only if it's a new file
+        if (imageFile instanceof File) {
+          instructorData.append('profilePic', imageFile);
+        }
+        
+        // Append userId for create (not for update)
+        if (!isEdit) {
+          instructorData.append('userId', formData.userId);
+        }
+      } else {
+        // Use plain object if no image upload
+        instructorData = {
+          department: formData.department,
+          isActive: formData.isActive,
+          experience: formData.experience ? parseInt(formData.experience) : undefined,
+          specializations: formData.specializations?.trim() || undefined,
+          achievements: formData.achievements
+            .filter(ach => ach.title && ach.title.trim())
+            .map(ach => ({
+              title: ach.title.trim(),
+              description: ach.description?.trim() || undefined,
+              date: ach.date || undefined,
+              organization: ach.organization?.trim() || undefined
+            })),
+          certifications: formData.certifications
+            .filter(cert => cert.name && cert.name.trim())
+            .map(cert => ({
+              name: cert.name.trim(),
+              issuer: cert.issuer?.trim() || undefined,
+              date: cert.date || undefined,
+              expiryDate: cert.expiryDate || undefined
+            })),
+          rating: formData.rating || 5,
+          locations: formData.locations
+            .filter(loc => loc.name && loc.name.trim())
+            .map(loc => ({
+              name: loc.name.trim(),
+              address: loc.address?.trim() || undefined,
+              type: loc.type || 'onsite'
+            })),
+          teachingMethods: formData.teachingMethods
+            .filter(tm => tm.method && tm.method.trim())
+            .map(tm => ({
+              method: tm.method.trim(),
+              description: tm.description?.trim() || undefined
+            })),
+          languages: formData.languages
+            .filter(lang => lang.language && lang.language.trim())
+            .map(lang => ({
+              language: lang.language.trim(),
+              proficiency: lang.proficiency || 'native'
+            })),
+          availability: formData.availability
+        };
+        
+        // Add userId for create (not for update)
+        if (!isEdit) {
+          instructorData.userId = formData.userId;
+        }
+      }
+
+      let response;
+      if (isEdit && initialData?.id) {
+        // Update existing instructor
+        response = await instructorAPI.updateInstructor(initialData.id, instructorData);
+      } else {
+        // Create new instructor with selected userId
+        response = await instructorAPI.createInstructor(instructorData);
+      }
+      
+      if (response.success) {
+        router.push('/instructors');
+      } else {
+        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} instructor`);
+      }
+    } catch (err) {
+      alert(err.message || `Failed to ${isEdit ? 'update' : 'create'} instructor`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const renderStep1 = () => (
-    <div className="space-y-6">
-      <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            First Name *
-          </label>
-          <input
-            type="text"
-            value={formData.firstName}
-            onChange={(e) => handleInputChange("firstName", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter first name"
-            required
-          />
-        </div>
+  const renderStep1 = () => {
+    // Get selected user's profile picture
+    const selectedUser = instructorUsers.find(u => u._id === formData.userId);
+    const currentProfilePic = selectedUser?.profilePic || imagePreview || "";
+    
+    return (
+      <div className="space-y-6">
+        <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select User (Instructor Role) <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.userId}
+              onChange={(e) => {
+                handleInputChange("userId", e.target.value);
+                // Update image preview when user is selected
+                const user = instructorUsers.find(u => u._id === e.target.value);
+                if (user?.profilePic && !imageFile) {
+                  setImagePreview(user.profilePic);
+                } else if (!e.target.value) {
+                  setImagePreview("");
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              disabled={loading || isEdit}
+            >
+              <option value="">{loading ? "Loading users..." : "Select a user with instructor role"}</option>
+              {instructorUsers.map(user => {
+                const name = user.firstName && user.lastName 
+                  ? `${user.firstName} ${user.lastName} (${user.username})`
+                  : user.username;
+                return (
+                  <option key={user._id} value={user._id}>
+                    {name} - {user.email}
+                  </option>
+                );
+              })}
+            </select>
+            {instructorUsers.length === 0 && !loading && (
+              <p className="text-sm text-gray-500 mt-1">
+                No users with instructor role found. <Link href="/users/add" className="text-blue-600 hover:underline">Create a user with instructor role</Link> first.
+              </p>
+            )}
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Last Name *
-          </label>
-          <input
-            type="text"
-            value={formData.lastName}
-            onChange={(e) => handleInputChange("lastName", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter last name"
-            required
-          />
-        </div>
+          {/* Profile Picture Upload */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Profile Picture <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <div className="space-y-4">
+              {(imagePreview || currentProfilePic) && (
+                <div className="relative inline-block">
+                  <img
+                    src={imagePreview || currentProfilePic}
+                    alt="Profile preview"
+                    className="w-32 h-32 rounded-full object-cover border-2 border-gray-300"
+                    onError={(e) => {
+                      e.target.src = '/images/user-placeholder.jpg';
+                    }}
+                  />
+                  {imageFile && (
+                    <button
+                      type="button"
+                      onClick={removeImage}
+                      className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+              <div>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Upload a profile picture (JPG, PNG, GIF). Max size: 5MB
+                </p>
+              </div>
+            </div>
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email *
-          </label>
-          <input
-            type="email"
-            value={formData.email}
-            onChange={(e) => handleInputChange("email", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter email address"
-            required
-          />
-        </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Department <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.department}
+              onChange={(e) => handleInputChange("department", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">Select department</option>
+              <option value="marine-engineering">Marine Engineering</option>
+              <option value="navigation">Navigation</option>
+              <option value="maritime-safety">Maritime Safety</option>
+              <option value="naval-operations">Naval Operations</option>
+              <option value="submarine-operations">Submarine Operations</option>
+            </select>
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Phone Number
-          </label>
-          <input
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => handleInputChange("phone", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter phone number"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Department *
-          </label>
-          <select
-            value={formData.department}
-            onChange={(e) => handleInputChange("department", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          >
-            <option value="">Select department</option>
-            <option value="marine-engineering">Marine Engineering</option>
-            <option value="navigation">Navigation</option>
-            <option value="maritime-safety">Maritime Safety</option>
-            <option value="naval-operations">Naval Operations</option>
-            <option value="submarine-operations">Submarine Operations</option>
-          </select>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          <Switch
-            checked={formData.isActive}
-            onChange={(checked) => handleInputChange("isActive", checked)}
-          />
-          <label className="text-sm font-medium text-gray-700">
-            Active Mentor
-          </label>
+          <div className="flex items-center space-x-3">
+            <Switch
+              checked={formData.isActive}
+              onChange={(checked) => handleInputChange("isActive", checked)}
+            />
+            <label className="text-sm font-medium text-gray-700">
+              Active Instructor <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep2 = () => (
     <div className="space-y-6">
@@ -317,7 +645,7 @@ const MultiStepMentorForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Years of Experience *
+            Years of Experience <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -325,13 +653,12 @@ const MultiStepMentorForm = () => {
             onChange={(e) => handleInputChange("experience", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder="Enter years of experience"
-            required
           />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Rating
+            Rating <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <div className="flex items-center space-x-2">
             {[1, 2, 3, 4, 5].map((star) => (
@@ -353,7 +680,7 @@ const MultiStepMentorForm = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Specializations
+          Specializations <span className="text-gray-400 text-xs">(optional)</span>
         </label>
         <textarea
           value={formData.specializations}
@@ -823,7 +1150,7 @@ const MultiStepMentorForm = () => {
         </span>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} noValidate>
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
         {currentStep === 3 && renderStep3()}
@@ -857,9 +1184,19 @@ const MultiStepMentorForm = () => {
                 type="submit"
                 variant="primary"
                 className="flex items-center gap-2"
+                disabled={submitting}
               >
-                <Save className="w-4 h-4" />
-                Create Mentor
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isEdit ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {isEdit ? 'Update Instructor' : 'Create Instructor'}
+                  </>
+                )}
               </Button>
             )}
           </div>

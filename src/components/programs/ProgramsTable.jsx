@@ -1,127 +1,90 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Badge, Button } from "@/components/ui";
-import { Eye, Edit, Trash2, Plus, Filter, Search, GraduationCap, Users, Calendar, Award } from "lucide-react";
+import { Eye, Edit, Trash2, Plus, Filter, Search, GraduationCap, Users, Award, Loader2 } from "lucide-react";
+import Link from "next/link";
+import * as programAPI from "@/lib/api/program";
 
 const ProgramsTable = () => {
+  const router = useRouter();
+  const [programs, setPrograms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
 
-  const programs = [
-    {
-      id: 1,
-      title: "Advanced Naval Leadership Program",
-      category: "Naval Operations",
-      director: "Captain Michael Thompson",
-      duration: "6 months",
-      startDate: "2024-03-01",
-      endDate: "2024-08-31",
-      participants: 25,
-      maxParticipants: 30,
-      status: "Active",
-      type: "Hybrid",
-      cost: "$15,000",
-      difficulty: "Advanced",
-      modules: 8,
-      certifications: ["Naval Leadership", "Strategic Planning"],
-      createdAt: "2024-01-15"
-    },
-    {
-      id: 2,
-      title: "Marine Engineering Mastery",
-      category: "Marine Engineering",
-      director: "Commander Sarah Johnson",
-      duration: "12 months",
-      startDate: "2024-02-01",
-      endDate: "2025-01-31",
-      participants: 15,
-      maxParticipants: 20,
-      status: "Active",
-      type: "Online",
-      cost: "$12,000",
-      difficulty: "Advanced",
-      modules: 12,
-      certifications: ["Marine Engineering", "Systems Design"],
-      createdAt: "2024-01-20"
-    },
-    {
-      id: 3,
-      title: "Submarine Operations Certification",
-      category: "Submarine Operations",
-      director: "Commander Lisa Chen",
-      duration: "8 months",
-      startDate: "2024-04-01",
-      endDate: "2024-11-30",
-      participants: 12,
-      maxParticipants: 15,
-      status: "Upcoming",
-      type: "Offline",
-      cost: "$18,000",
-      difficulty: "Advanced",
-      modules: 10,
-      certifications: ["Submarine Operations", "Underwater Navigation"],
-      createdAt: "2024-02-01"
-    },
-    {
-      id: 4,
-      title: "Maritime Safety Specialist",
-      category: "Maritime Safety",
-      director: "Captain David Wilson",
-      duration: "4 months",
-      startDate: "2024-01-15",
-      endDate: "2024-05-15",
-      participants: 45,
-      maxParticipants: 50,
-      status: "Active",
-      type: "Hybrid",
-      cost: "$8,000",
-      difficulty: "Intermediate",
-      modules: 6,
-      certifications: ["Safety Management", "Risk Assessment"],
-      createdAt: "2023-12-15"
-    },
-    {
-      id: 5,
-      title: "Navigation Systems Expert",
-      category: "Navigation",
-      director: "Lieutenant Commander Alex Brown",
-      duration: "6 months",
-      startDate: "2024-03-15",
-      endDate: "2024-09-15",
-      participants: 30,
-      maxParticipants: 35,
-      status: "Active",
-      type: "Online",
-      cost: "$10,000",
-      difficulty: "Intermediate",
-      modules: 8,
-      certifications: ["GPS Systems", "Electronic Navigation"],
-      createdAt: "2024-02-10"
-    },
-    {
-      id: 6,
-      title: "Naval Architecture Fundamentals",
-      category: "Marine Engineering",
-      director: "Commander James Rodriguez",
-      duration: "9 months",
-      startDate: "2024-05-01",
-      endDate: "2025-01-31",
-      participants: 0,
-      maxParticipants: 25,
-      status: "Draft",
-      type: "Hybrid",
-      cost: "$14,000",
-      difficulty: "Intermediate",
-      modules: 9,
-      certifications: ["Naval Architecture", "Structural Design"],
-      createdAt: "2024-03-01"
+  // Fetch programs
+  const fetchPrograms = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await programAPI.getAllPrograms({ limit: 100 });
+      if (response.success) {
+        setPrograms(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching programs:', err);
+      setError(err.message || 'Failed to fetch programs');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const categories = ["All", "Marine Engineering", "Navigation", "Maritime Safety", "Naval Operations", "Submarine Operations"];
+  useEffect(() => {
+    fetchPrograms();
+  }, []);
 
-  const filteredPrograms = programs.filter(program => {
+  // Format program data
+  const formatProgram = (program) => {
+    const startDate = program.startDate ? new Date(program.startDate).toISOString().split('T')[0] : 'N/A';
+    const endDate = program.endDate ? new Date(program.endDate).toISOString().split('T')[0] : 'N/A';
+    
+    // Determine status based on dates
+    let status = "Upcoming";
+    if (program.startDate && program.endDate) {
+      const now = new Date();
+      const start = new Date(program.startDate);
+      const end = new Date(program.endDate);
+      if (now > end) {
+        status = "Completed";
+      } else if (now >= start && now <= end) {
+        status = "Active";
+      } else if (now < start) {
+        status = "Upcoming";
+      }
+    }
+
+    // Format type
+    const type = program.isOnline ? 'Online' : 'Offline';
+
+    // Format cost
+    const cost = program.cost === 0 || program.cost === null ? 'Free' : `$${program.cost}`;
+
+    return {
+      id: program._id,
+      title: program.title,
+      category: program.category?.name || 'N/A',
+      director: program.programDirector || 'N/A',
+      duration: program.duration || 'N/A',
+      startDate: startDate,
+      endDate: endDate,
+      participants: program.participants || 0, // This would need to come from enrollments
+      maxParticipants: program.maxParticipants || 0,
+      status: status,
+      type: type,
+      cost: cost,
+      difficulty: program.difficulty || 'beginner',
+      modules: program.modules?.length || 0,
+      certifications: program.certifications || [],
+      createdAt: program.createdAt
+    };
+  };
+
+  const formattedPrograms = programs.map(formatProgram);
+
+  const filteredPrograms = formattedPrograms.filter(program => {
     const matchesSearch = program.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          program.director.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = filterCategory === "" || program.category === filterCategory;
@@ -149,15 +112,17 @@ const ProgramsTable = () => {
   };
 
   const getDifficultyColor = (difficulty) => {
-    switch (difficulty) {
-      case "Beginner": return "info";
-      case "Intermediate": return "warning";
-      case "Advanced": return "error";
-      default: return "default";
-    }
+    const difficultyMap = {
+      'beginner': 'info',
+      'intermediate': 'warning',
+      'advanced': 'error',
+      'expert': 'error'
+    };
+    return difficultyMap[difficulty] || 'default';
   };
 
   const formatDate = (dateString) => {
+    if (dateString === 'N/A') return 'N/A';
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -166,8 +131,40 @@ const ProgramsTable = () => {
   };
 
   const getEnrollmentProgress = (participants, max) => {
+    if (max === 0) return 0;
     return Math.round((participants / max) * 100);
   };
+
+  const handleDelete = async (programId, programTitle) => {
+    if (!confirm(`Are you sure you want to delete "${programTitle}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await programAPI.deleteProgram(programId);
+      if (response.success) {
+        await fetchPrograms();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to delete program');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -177,7 +174,11 @@ const ProgramsTable = () => {
           <h2 className="text-2xl font-bold text-gray-900">Programs Management</h2>
           <p className="text-gray-600">Manage and monitor all training programs</p>
         </div>
-        <Button variant="primary" className="flex items-center gap-2">
+        <Button 
+          variant="primary" 
+          className="flex items-center gap-2"
+          onClick={() => router.push('/programs/add')}
+        >
           <Plus className="w-4 h-4" />
           Add New Program
         </Button>
@@ -207,19 +208,14 @@ const ProgramsTable = () => {
               onChange={(e) => setFilterCategory(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {categories.map(category => (
-                <option key={category} value={category === "All" ? "" : category}>
+              <option value="">All Categories</option>
+              {Array.from(new Set(formattedPrograms.map(p => p.category))).map(category => (
+                <option key={category} value={category}>
                   {category}
                 </option>
               ))}
             </select>
           </div>
-
-          {/* Additional Filters Button */}
-          <Button variant="outline" className="flex items-center gap-2">
-            <Filter className="w-4 h-4" />
-            More Filters
-          </Button>
         </div>
       </div>
 
@@ -229,7 +225,7 @@ const ProgramsTable = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Programs</p>
-              <p className="text-2xl font-bold text-gray-900">{programs.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{formattedPrograms.length}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <GraduationCap className="w-4 h-4 text-blue-600" />
@@ -242,7 +238,7 @@ const ProgramsTable = () => {
             <div>
               <p className="text-sm text-gray-600">Active Programs</p>
               <p className="text-2xl font-bold text-green-600">
-                {programs.filter(p => p.status === "Active").length}
+                {formattedPrograms.filter(p => p.status === "Active").length}
               </p>
             </div>
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -256,7 +252,7 @@ const ProgramsTable = () => {
             <div>
               <p className="text-sm text-gray-600">Total Participants</p>
               <p className="text-2xl font-bold text-gray-900">
-                {programs.reduce((sum, program) => sum + program.participants, 0)}
+                {formattedPrograms.reduce((sum, program) => sum + program.participants, 0)}
               </p>
             </div>
             <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -270,7 +266,7 @@ const ProgramsTable = () => {
             <div>
               <p className="text-sm text-gray-600">Total Modules</p>
               <p className="text-2xl font-bold text-gray-900">
-                {programs.reduce((sum, program) => sum + program.modules, 0)}
+                {formattedPrograms.reduce((sum, program) => sum + program.modules, 0)}
               </p>
             </div>
             <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -298,83 +294,84 @@ const ProgramsTable = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPrograms.map((program) => (
-                <tr key={program.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-4 px-4">
-                    <div>
-                      <p className="font-medium text-gray-900">{program.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge color={getDifficultyColor(program.difficulty)} size="sm">
-                          {program.difficulty}
-                        </Badge>
-                        <span className="text-xs text-gray-600">{program.modules} modules</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4 text-gray-900">{program.director}</td>
-                  <td className="py-4 px-4">
-                    <Badge color="default">{program.category}</Badge>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div>
-                      <p className="text-sm text-gray-900">{program.duration}</p>
-                      <p className="text-xs text-gray-600">
-                        {formatDate(program.startDate)} - {formatDate(program.endDate)}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div>
-                      <p className="text-sm text-gray-900">{program.participants}/{program.maxParticipants}</p>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
-                        <div 
-                          className="bg-blue-600 h-1.5 rounded-full" 
-                          style={{ width: `${getEnrollmentProgress(program.participants, program.maxParticipants)}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-xs text-gray-600">{getEnrollmentProgress(program.participants, program.maxParticipants)}%</p>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <Badge color={getTypeColor(program.type)}>{program.type}</Badge>
-                  </td>
-                  <td className="py-4 px-4">
-                    <Badge color={getStatusColor(program.status)}>{program.status}</Badge>
-                  </td>
-                  <td className="py-4 px-4 text-gray-900 font-medium">{program.cost}</td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+              {filteredPrograms.length === 0 ? (
+                <tr>
+                  <td colSpan="9" className="py-8 text-center text-gray-500">
+                    No programs found
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredPrograms.map((program) => (
+                  <tr key={program.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-4 px-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{program.title}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge color={getDifficultyColor(program.difficulty)} size="sm">
+                            {program.difficulty}
+                          </Badge>
+                          <span className="text-xs text-gray-600">{program.modules} modules</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4 text-gray-900">{program.director}</td>
+                    <td className="py-4 px-4">
+                      <Badge color="default">{program.category}</Badge>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div>
+                        <p className="text-sm text-gray-900">{program.duration}</p>
+                        <p className="text-xs text-gray-600">
+                          {formatDate(program.startDate)} - {formatDate(program.endDate)}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div>
+                        <p className="text-sm text-gray-900">{program.participants}/{program.maxParticipants}</p>
+                        <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                          <div 
+                            className="bg-blue-600 h-1.5 rounded-full" 
+                            style={{ width: `${getEnrollmentProgress(program.participants, program.maxParticipants)}%` }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-600">{getEnrollmentProgress(program.participants, program.maxParticipants)}%</p>
+                      </div>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Badge color={getTypeColor(program.type)}>{program.type}</Badge>
+                    </td>
+                    <td className="py-4 px-4">
+                      <Badge color={getStatusColor(program.status)}>{program.status}</Badge>
+                    </td>
+                    <td className="py-4 px-4 text-gray-900 font-medium">{program.cost}</td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2">
+                        <Link href={`/programs/details/${program.id}`}>
+                          <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Link href={`/programs/update/${program.id}`}>
+                          <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-red-600 hover:text-red-700"
+                          onClick={() => handleDelete(program.id, program.title)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
-        </div>
-
-        {/* Pagination */}
-        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700">
-              Showing {filteredPrograms.length} of {programs.length} programs
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled>Previous</Button>
-              <Button variant="primary" size="sm">1</Button>
-              <Button variant="outline" size="sm">2</Button>
-              <Button variant="outline" size="sm">3</Button>
-              <Button variant="outline" size="sm">Next</Button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

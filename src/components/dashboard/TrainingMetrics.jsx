@@ -1,10 +1,85 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui";
-import { Users, BookOpen, Calendar, DollarSign } from "lucide-react";
+import { Users, BookOpen, Calendar, DollarSign, Loader2 } from "lucide-react";
+import { getDashboardStats } from "@/lib/api/dashboard";
 
 export const TrainingMetrics = () => {
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await getDashboardStats();
+        
+        if (response.success) {
+          setStats(response.data);
+        } else {
+          setError(response.message || "Failed to fetch statistics");
+        }
+      } catch (err) {
+        console.error("Error fetching dashboard stats:", err);
+        setError(err.message || "An error occurred while fetching statistics");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-2xl border border-gray-200 bg-white p-5 md:p-6">
+            <div className="flex items-center justify-center w-12 h-12 bg-gray-100 rounded-xl mb-5">
+              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+            </div>
+            <div className="h-16 bg-gray-100 rounded animate-pulse" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (error || !stats) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-5 md:p-6">
+        <p className="text-red-600">
+          {error || "Failed to load dashboard statistics"}
+        </p>
+      </div>
+    );
+  }
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatGrowth = (growth) => {
+    const isPositive = growth >= 0;
+    return {
+      value: Math.abs(growth).toFixed(1),
+      isPositive
+    };
+  };
+
+  const studentsGrowth = formatGrowth(stats.totalStudents.growth);
+  const coursesGrowth = formatGrowth(stats.totalCourses.growth);
+  const eventsGrowth = formatGrowth(stats.upcomingEvents.growth);
+  const revenueGrowth = formatGrowth(stats.monthlyRevenue.growth);
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-6">
       {/* Total Students */}
@@ -19,14 +94,18 @@ export const TrainingMetrics = () => {
               Total Students
             </span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm">
-              15,240
+              {stats.totalStudents.value.toLocaleString()}
             </h4>
           </div>
-          <Badge color="success">
+          <Badge color={studentsGrowth.isPositive ? "success" : "default"}>
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              {studentsGrowth.isPositive ? (
+                <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              ) : (
+                <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              )}
             </svg>
-            8.2%
+            {studentsGrowth.value}%
           </Badge>
         </div>
       </div>
@@ -42,15 +121,19 @@ export const TrainingMetrics = () => {
               Total Courses
             </span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm">
-              425
+              {stats.totalCourses.value.toLocaleString()}
             </h4>
           </div>
 
-          <Badge color="success">
+          <Badge color={coursesGrowth.isPositive ? "success" : "default"}>
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              {coursesGrowth.isPositive ? (
+                <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              ) : (
+                <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              )}
             </svg>
-            12.5%
+            {coursesGrowth.value}%
           </Badge>
         </div>
       </div>
@@ -66,15 +149,19 @@ export const TrainingMetrics = () => {
               Upcoming Events
             </span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm">
-              28
+              {stats.upcomingEvents.value.toLocaleString()}
             </h4>
           </div>
 
-          <Badge color="success">
+          <Badge color={eventsGrowth.isPositive ? "success" : "default"}>
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              {eventsGrowth.isPositive ? (
+                <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              ) : (
+                <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              )}
             </svg>
-            5.1%
+            {eventsGrowth.value}%
           </Badge>
         </div>
       </div>
@@ -90,15 +177,19 @@ export const TrainingMetrics = () => {
               Monthly Revenue
             </span>
             <h4 className="mt-2 font-bold text-gray-800 text-title-sm">
-              $45,230
+              {formatCurrency(stats.monthlyRevenue.value)}
             </h4>
           </div>
 
-          <Badge color="success">
+          <Badge color={revenueGrowth.isPositive ? "success" : "default"}>
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              {revenueGrowth.isPositive ? (
+                <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 5.414V17a1 1 0 11-2 0V5.414L6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              ) : (
+                <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 14.586V3a1 1 0 012 0v11.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+              )}
             </svg>
-            15.3%
+            {revenueGrowth.value}%
           </Badge>
         </div>
       </div>

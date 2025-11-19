@@ -1,18 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { use } from "react";
 import { PageBreadcrumb } from "@/components/common";
 import { MultiStepEventForm } from "@/components/events";
 
 export default function UpdateEventPage({ params }) {
-  const { id } = params;
+  const { id } = use(params);
 
-  // In a real app, you would fetch the event data by ID
   const eventData = {
-    id: id,
-    title: "Sample Event",
-    description: "Sample description",
-    // ... other event data
+    id: id
   };
 
   return (

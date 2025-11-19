@@ -1,14 +1,21 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Switch } from "@/components/ui";
-import { Plus, Trash2, Save, ArrowLeft, ArrowRight, ArrowUp, ChevronUp } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ArrowRight, ArrowUp, ChevronUp, Loader2 } from "lucide-react";
+import * as testAPI from "@/lib/api/test";
+import * as courseAPI from "@/lib/api/course";
 
-const MultiStepTestForm = () => {
+const MultiStepTestForm = ({ initialData = null, isEdit = false }) => {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedQuestion, setExpandedQuestion] = useState(0); // Track which question is expanded
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     // Step 1: Test Details
     title: "",
@@ -35,6 +42,64 @@ const MultiStepTestForm = () => {
   });
 
   const totalSteps = 2;
+
+  // Fetch courses and initial data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch courses
+        const coursesResponse = await courseAPI.getAllCourses({ limit: 100 });
+        if (coursesResponse.success) {
+          setCourses(coursesResponse.data || []);
+        }
+
+        // If editing, fetch test data
+        if (isEdit && initialData?.id) {
+          setLoading(true);
+          const testResponse = await testAPI.getTestById(initialData.id);
+          if (testResponse.success) {
+            const test = testResponse.data;
+            setFormData({
+              title: test.title || "",
+              description: test.description || "",
+              courseId: test.courseId?._id || test.courseId || "",
+              courseName: test.courseId?.title || test.courseName || "",
+              duration: test.duration?.toString() || "",
+              passingScore: test.passingScore?.toString() || "",
+              randomizeQuestions: test.randomizeQuestions || false,
+              showResults: test.showResults !== undefined ? test.showResults : true,
+              isActive: test.isActive !== undefined ? test.isActive : true,
+              questions: test.questions && test.questions.length > 0
+                ? test.questions.map((q, idx) => ({
+                    id: idx + 1,
+                    question: q.question || "",
+                    options: q.options || ["", "", "", ""],
+                    correctAnswer: q.correctAnswer || 0,
+                    points: q.points || 1,
+                    image: q.image || null
+                  }))
+                : [{
+                    id: 1,
+                    question: "",
+                    options: ["", "", "", ""],
+                    correctAnswer: 0,
+                    points: 1,
+                    image: null
+                  }]
+            });
+          }
+        } else if (initialData) {
+          // Use provided initial data
+          setFormData(prev => ({ ...prev, ...initialData }));
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [isEdit, initialData]);
 
   // Handle scroll to show/hide scroll-to-top button
   useEffect(() => {
@@ -102,22 +167,103 @@ const MultiStepTestForm = () => {
     }
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     }
   };
 
-  const prevStep = () => {
+  const prevStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Test submitted:", formData);
-    // Handle form submission here
+    e.stopPropagation();
+    
+    // Only submit if we're on the final step
+    if (currentStep !== totalSteps) {
+      return;
+    }
+    
+    try {
+      setSubmitting(true);
+      
+      // Check if any question has an image file
+      const hasImageUploads = formData.questions.some(q => q.image && q.image instanceof File);
+      
+      // Prepare questions data (excluding File objects, they'll be added separately)
+      const questionsData = formData.questions.map(q => ({
+        question: q.question.trim(),
+        options: q.options.filter(opt => opt.trim() !== ''),
+        correctAnswer: q.correctAnswer,
+        points: parseInt(q.points) || 1,
+        image: q.image && typeof q.image === 'string' ? q.image : null // Keep existing image URL if not a File
+      }));
+      
+      let testData;
+      
+      if (hasImageUploads) {
+        // Use FormData if there are image uploads
+        testData = new FormData();
+        testData.append('title', formData.title.trim());
+        testData.append('description', formData.description?.trim() || "");
+        testData.append('courseId', formData.courseId);
+        testData.append('duration', parseInt(formData.duration) || 60);
+        testData.append('passingScore', parseInt(formData.passingScore) || 70);
+        testData.append('randomizeQuestions', formData.randomizeQuestions);
+        testData.append('showResults', formData.showResults);
+        testData.append('isActive', formData.isActive);
+        testData.append('questions', JSON.stringify(questionsData));
+        
+        // Append question images with proper fieldnames
+        formData.questions.forEach((q, index) => {
+          if (q.image && q.image instanceof File) {
+            testData.append(`questionImage[${index}]`, q.image);
+          }
+        });
+      } else {
+        // Use plain object if no image uploads
+        testData = {
+          title: formData.title.trim(),
+          description: formData.description?.trim() || "",
+          courseId: formData.courseId,
+          duration: parseInt(formData.duration) || 60,
+          passingScore: parseInt(formData.passingScore) || 70,
+          randomizeQuestions: formData.randomizeQuestions,
+          showResults: formData.showResults,
+          isActive: formData.isActive,
+          questions: questionsData
+        };
+      }
+
+      let response;
+      if (isEdit && initialData?.id) {
+        response = await testAPI.updateTest(initialData.id, testData);
+      } else {
+        response = await testAPI.createTest(testData);
+      }
+      
+      if (response.success) {
+        router.push(`/tests`);
+      } else {
+        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} test`);
+      }
+    } catch (err) {
+      alert(err.message || `Failed to ${isEdit ? 'update' : 'create'} test`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -127,7 +273,7 @@ const MultiStepTestForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Test Title *
+            Test Title <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -141,33 +287,31 @@ const MultiStepTestForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Related Course *
+            Related Course <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.courseId}
             onChange={(e) => {
-              handleInputChange("courseId", e.target.value);
-              const courseName = e.target.options[e.target.selectedIndex].text;
-              handleInputChange("courseName", courseName);
+              const selectedCourseId = e.target.value;
+              handleInputChange("courseId", selectedCourseId);
+              const selectedCourse = courses.find(c => c._id === selectedCourseId);
+              handleInputChange("courseName", selectedCourse ? selectedCourse.title : "");
             }}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           >
             <option value="">Select a course</option>
-            <option value="1">Marine Engineering Fundamentals</option>
-            <option value="2">Advanced Navigation Techniques</option>
-            <option value="3">Maritime Safety Protocols</option>
-            <option value="4">Naval Operations Management</option>
-            <option value="5">Submarine Systems Operation</option>
-            <option value="6">Ship Stability and Construction</option>
-            <option value="7">Electronic Navigation Systems</option>
-            <option value="8">Emergency Response Procedures</option>
+            {courses.map(course => (
+              <option key={course._id} value={course._id}>
+                {course.title}
+              </option>
+            ))}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Duration (minutes) *
+            Duration (minutes) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -182,7 +326,7 @@ const MultiStepTestForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Passing Score (%) *
+            Passing Score (%) <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
@@ -199,7 +343,7 @@ const MultiStepTestForm = () => {
 
        <div>
          <label className="block text-sm font-medium text-gray-700 mb-2">
-           Description
+           Description <span className="text-gray-400 text-xs">(optional)</span>
          </label>
          <textarea
            value={formData.description}
@@ -233,14 +377,18 @@ const MultiStepTestForm = () => {
           </label>
         </div>
 
-        <div className="flex items-center space-x-3">
-          <Switch
-            checked={formData.isActive}
-            onChange={(checked) => handleInputChange("isActive", checked)}
-          />
-          <label className="text-sm font-medium text-gray-700">
-            Activate test (make available to students)
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Status <span className="text-gray-400 text-xs">(optional)</span>
           </label>
+          <select
+            value={formData.isActive ? "active" : "inactive"}
+            onChange={(e) => handleInputChange("isActive", e.target.value === "active")}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
         </div>
       </div>
     </div>
@@ -515,7 +663,7 @@ const MultiStepTestForm = () => {
           <Button
             type="button"
             variant="outline"
-            onClick={prevStep}
+            onClick={(e) => prevStep(e)}
             disabled={currentStep === 1}
             className="flex items-center gap-2"
           >
@@ -528,7 +676,7 @@ const MultiStepTestForm = () => {
               <Button
                 type="button"
                 variant="primary"
-                onClick={nextStep}
+                onClick={(e) => nextStep(e)}
                 className="flex items-center gap-2"
               >
                 Next
@@ -539,9 +687,19 @@ const MultiStepTestForm = () => {
                 type="submit"
                 variant="primary"
                 className="flex items-center gap-2"
+                disabled={submitting || loading}
               >
-                <Save className="w-4 h-4" />
-                Create Test
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isEdit ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {isEdit ? 'Update Test' : 'Create Test'}
+                  </>
+                )}
               </Button>
             )}
           </div>

@@ -1,92 +1,88 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import DataTable from "@/components/common/DataTable";
+import * as eventAPI from "@/lib/api/event";
 
 const EventsTable = () => {
-  const events = [
-    {
-      id: 1,
-      title: "Naval Engineering Conference 2024",
-      type: "Conference",
-      category: "Marine Engineering",
-      startDate: "2024-03-15",
-      endDate: "2024-03-17",
-      startTime: "09:00",
-      endTime: "17:00",
-      location: "Naval Base San Diego",
-      maxAttendees: 200,
-      registeredAttendees: 156,
-      status: "Upcoming",
-      cost: "$500",
-      organizer: "Commander James Rodriguez"
-    },
-    {
-      id: 2,
-      title: "Maritime Safety Workshop",
-      type: "Workshop",
-      category: "Maritime Safety",
-      startDate: "2024-03-20",
-      endDate: "2024-03-20",
-      startTime: "08:00",
-      endTime: "16:00",
-      location: "Online",
-      maxAttendees: 50,
-      registeredAttendees: 45,
-      status: "Upcoming",
-      cost: "Free",
-      organizer: "Captain Michael Thompson"
-    },
-    {
-      id: 3,
-      title: "Submarine Operations Training",
-      type: "Training",
-      category: "Submarine Operations",
-      startDate: "2024-03-10",
-      endDate: "2024-03-14",
-      startTime: "07:00",
-      endTime: "18:00",
-      location: "Submarine Base Groton",
-      maxAttendees: 30,
-      registeredAttendees: 28,
-      status: "Ongoing",
-      cost: "$2,000",
-      organizer: "Commander Lisa Chen"
-    },
-    {
-      id: 4,
-      title: "Navigation Systems Seminar",
-      type: "Seminar",
-      category: "Navigation",
-      startDate: "2024-02-28",
-      endDate: "2024-02-28",
-      startTime: "10:00",
-      endTime: "15:00",
-      location: "Naval Academy Annapolis",
-      maxAttendees: 100,
-      registeredAttendees: 89,
-      status: "Completed",
-      cost: "$200",
-      organizer: "Lieutenant Commander Alex Brown"
-    },
-    {
-      id: 5,
-      title: "Marine Engineering Symposium",
-      type: "Symposium",
-      category: "Marine Engineering",
-      startDate: "2024-04-05",
-      endDate: "2024-04-07",
-      startTime: "08:30",
-      endTime: "17:30",
-      location: "MIT Cambridge",
-      maxAttendees: 150,
-      registeredAttendees: 134,
-      status: "Upcoming",
-      cost: "$750",
-      organizer: "Professor Sarah Johnson"
+  const router = useRouter();
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch events
+  const fetchEvents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await eventAPI.getAllEvents({ limit: 100 });
+      if (response.success) {
+        setEvents(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching events:', err);
+      setError(err.message || 'Failed to fetch events');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  useEffect(() => {
+    fetchEvents();
+  }, []);
+
+  // Format event data for display
+  const formatEvent = (event) => {
+    const startDate = event.startDate ? new Date(event.startDate).toISOString().split('T')[0] : 'N/A';
+    const endDate = event.endDate ? new Date(event.endDate).toISOString().split('T')[0] : 'N/A';
+    
+    // Determine status based on dates
+    let status = "Upcoming";
+    if (event.startDate && event.endDate) {
+      const now = new Date();
+      const start = new Date(event.startDate);
+      const end = new Date(event.endDate);
+      if (now > end) {
+        status = "Completed";
+      } else if (now >= start && now <= end) {
+        status = "Ongoing";
+      }
+    }
+
+    // Format event type
+    const typeMap = {
+      'conference': 'Conference',
+      'workshop': 'Workshop',
+      'training': 'Training',
+      'seminar': 'Seminar',
+      'meeting': 'Meeting'
+    };
+    const type = typeMap[event.eventType] || event.eventType || 'N/A';
+
+    // Format cost
+    const cost = event.cost === 0 || event.cost === null ? 'Free' : `$${event.cost}`;
+
+    return {
+      id: event._id,
+      title: event.title,
+      type: type,
+      category: event.category?.name || 'N/A',
+      startDate: startDate,
+      endDate: endDate,
+      startTime: event.startTime || 'N/A',
+      endTime: event.endTime || 'N/A',
+      location: event.isOnline ? 'Online' : (event.location || 'N/A'),
+      maxAttendees: event.maxAttendees || 0,
+      registeredAttendees: event.registeredAttendees || 0, // This would need to come from registrations
+      status: status,
+      cost: cost,
+      organizer: event.organizer || 'N/A'
+    };
+  };
+
+  const formattedEvents = events.map(formatEvent);
 
   const columns = [
     {
@@ -108,7 +104,7 @@ const EventsTable = () => {
           "Workshop": "warning",
           "Training": "success",
           "Seminar": "default",
-          "Symposium": "info"
+          "Meeting": "info"
         };
         return <Badge color={colors[value] || "default"}>{value}</Badge>;
       }
@@ -125,14 +121,16 @@ const EventsTable = () => {
     {
       key: "registeredAttendees",
       label: "Attendees",
-      render: (value, item) => (
-        <div>
-          <p className="font-medium">{value}/{item.maxAttendees}</p>
-          <p className="text-sm text-gray-600">
-            {Math.round((value / item.maxAttendees) * 100)}% filled
-          </p>
-        </div>
-      )
+      render: (value, item) => {
+        const max = item.maxAttendees || 1;
+        const percentage = Math.round((value / max) * 100);
+        return (
+          <div>
+            <p className="font-medium">{value}/{max}</p>
+            <p className="text-sm text-gray-600">{percentage}% filled</p>
+          </div>
+        );
+      }
     },
     {
       key: "status",
@@ -158,31 +156,26 @@ const EventsTable = () => {
     {
       key: "type",
       label: "Event Type",
-      options: ["Conference", "Workshop", "Training", "Seminar", "Symposium"]
+      options: ["Conference", "Workshop", "Training", "Seminar", "Meeting"]
     },
     {
       key: "status",
       label: "Status",
       options: ["Upcoming", "Ongoing", "Completed", "Cancelled"]
-    },
-    {
-      key: "category",
-      label: "Category",
-      options: ["Marine Engineering", "Navigation", "Maritime Safety", "Naval Operations", "Submarine Operations"]
     }
   ];
 
   const stats = [
     {
       label: "Total Events",
-      value: events.length,
+      value: formattedEvents.length,
       icon: "📅",
       bgColor: "bg-blue-100",
       iconColor: "text-blue-600"
     },
     {
       label: "Upcoming Events",
-      value: events.filter(e => e.status === "Upcoming").length,
+      value: formattedEvents.filter(e => e.status === "Upcoming").length,
       icon: "⏰",
       bgColor: "bg-yellow-100",
       iconColor: "text-yellow-600",
@@ -190,14 +183,19 @@ const EventsTable = () => {
     },
     {
       label: "Total Attendees",
-      value: events.reduce((sum, event) => sum + event.registeredAttendees, 0),
+      value: formattedEvents.reduce((sum, event) => sum + event.registeredAttendees, 0),
       icon: "👥",
       bgColor: "bg-green-100",
       iconColor: "text-green-600"
     },
     {
       label: "Avg. Capacity",
-      value: `${Math.round(events.reduce((sum, event) => sum + (event.registeredAttendees / event.maxAttendees), 0) / events.length * 100)}%`,
+      value: formattedEvents.length > 0
+        ? `${Math.round(formattedEvents.reduce((sum, event) => {
+            const max = event.maxAttendees || 1;
+            return sum + (event.registeredAttendees / max);
+          }, 0) / formattedEvents.length * 100)}%`
+        : "0%",
       icon: "📊",
       bgColor: "bg-purple-100",
       iconColor: "text-purple-600"
@@ -205,28 +203,53 @@ const EventsTable = () => {
   ];
 
   const handleAdd = () => {
-    window.location.href = "/admin/events/add";
+    router.push("/events/add");
   };
 
   const handleEdit = (event) => {
-    window.location.href = `/admin/events/update/${event.id}`;
+    router.push(`/events/update/${event.id}`);
   };
 
-  const handleDelete = (event) => {
-    if (confirm(`Are you sure you want to delete "${event.title}"?`)) {
-      console.log("Delete event:", event);
+  const handleDelete = async (event) => {
+    if (!confirm(`Are you sure you want to delete "${event.title}"?`)) {
+      return;
+    }
+
+    try {
+      const response = await eventAPI.deleteEvent(event.id);
+      if (response.success) {
+        await fetchEvents();
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to delete event');
     }
   };
 
   const handleView = (event) => {
-    window.location.href = `/admin/events/details/${event.id}`;
+    router.push(`/events/details/${event.id}`);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-600">Loading events...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <DataTable
       title="Events Management"
       description="Manage conferences, workshops, and training events"
-      data={events}
+      data={formattedEvents}
       columns={columns}
       filters={filters}
       stats={stats}

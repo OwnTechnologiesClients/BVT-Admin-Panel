@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Switch } from "@/components/ui";
-import { Plus, Trash2, Save, ArrowLeft, ArrowRight } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import * as courseAPI from "@/lib/api/course";
+import * as categoryAPI from "@/lib/api/courseCategory";
+import * as instructorAPI from "@/lib/api/instructor";
 
-const MultiStepCourseForm = () => {
+const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [formData, setFormData] = useState({
     // Step 1: Basic Information
     title: "",
@@ -32,18 +39,114 @@ const MultiStepCourseForm = () => {
         id: 1,
         title: "",
         description: "",
-        order: 1,
         duration: ""
       }
     ]
   });
 
   const totalSteps = 3;
+  const [categories, setCategories] = useState([]);
+  const [instructors, setInstructors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Fetch categories and instructors
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [categoriesResponse, instructorsResponse] = await Promise.all([
+          categoryAPI.getAllCategories({ limit: 100 }),
+          instructorAPI.getAllInstructors({ limit: 100 })
+        ]);
+
+        if (categoriesResponse.success) {
+          setCategories(categoriesResponse.data || []);
+        }
+
+        if (instructorsResponse.success) {
+          setInstructors(instructorsResponse.data || []);
+        }
+
+        // If editing, fetch course data
+        if (isEdit && initialData?.id) {
+          const courseResponse = await courseAPI.getCourseById(initialData.id);
+          if (courseResponse.success) {
+            const course = courseResponse.data;
+            setFormData({
+              title: course.title || "",
+              slug: course.slug || "",
+              description: course.description || "",
+              category: course.category?._id || course.category || "",
+              instructor: course.instructor?._id || course.instructor || "",
+              duration: course.duration || "",
+              level: course.level || "beginner",
+              price: course.price?.toString() || "",
+              originalPrice: course.originalPrice?.toString() || "",
+              image: course.image || "",
+              isFeatured: course.isFeatured || false,
+              isOnline: course.isOnline !== undefined ? course.isOnline : true,
+              maxStudents: course.maxStudents || 100,
+              prerequisites: course.prerequisites || "",
+              learningObjectives: course.learningObjectives || [],
+              chapters: course.chapters || [{ id: 1, title: "", description: "", duration: "" }]
+            });
+            // Set image preview if image exists
+            if (course.image) {
+              setImagePreview(course.image);
+            }
+          }
+        } else if (initialData) {
+          setFormData(prev => ({ ...prev, ...initialData }));
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [isEdit, initialData]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
+    }));
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image size should be less than 5MB');
+        return;
+      }
+
+      setImageFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview("");
+    setFormData(prev => ({
+      ...prev,
+      image: ""
     }));
   };
 
@@ -61,7 +164,6 @@ const MultiStepCourseForm = () => {
       id: formData.chapters.length + 1,
       title: "",
       description: "",
-      order: formData.chapters.length + 1,
       duration: ""
     };
     setFormData(prev => ({
@@ -116,10 +218,62 @@ const MultiStepCourseForm = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Course submitted:", formData);
-    // Handle form submission here
+    
+    try {
+      setSubmitting(true);
+      
+      // Handle image upload - convert to base64 if file is selected
+      let imageUrl = formData.image;
+      if (imageFile) {
+        // Convert file to base64
+        const reader = new FileReader();
+        const base64Promise = new Promise((resolve, reject) => {
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+        });
+        reader.readAsDataURL(imageFile);
+        imageUrl = await base64Promise;
+      }
+      
+      const courseData = {
+        title: formData.title.trim(),
+        slug: formData.slug.trim() || formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
+        description: formData.description.trim(),
+        category: formData.category,
+        instructor: formData.instructor,
+        duration: formData.duration.trim(),
+        level: formData.level.toLowerCase(),
+        price: parseFloat(formData.price) || 0,
+        originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
+        image: imageUrl || undefined,
+        isFeatured: formData.isFeatured,
+        isOnline: formData.isOnline,
+        maxStudents: formData.maxStudents || 100,
+        prerequisites: formData.prerequisites?.trim() || undefined,
+        learningObjectives: Array.isArray(formData.learningObjectives) 
+          ? formData.learningObjectives.filter(obj => obj.trim())
+          : undefined
+      };
+
+      let response;
+      if (isEdit && initialData?.id) {
+        response = await courseAPI.updateCourse(initialData.id, courseData);
+      } else {
+        response = await courseAPI.createCourse(courseData);
+      }
+      
+      if (response.success) {
+        router.push('/courses');
+      } else {
+        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} course`);
+      }
+    } catch (err) {
+      alert(err.message || `Failed to ${isEdit ? 'update' : 'create'} course`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -129,7 +283,7 @@ const MultiStepCourseForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Course Title *
+            Course Title <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -143,7 +297,7 @@ const MultiStepCourseForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Course Slug *
+            Course Slug <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -157,7 +311,7 @@ const MultiStepCourseForm = () => {
 
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description *
+            Description <span className="text-red-500">*</span>
           </label>
           <textarea
             value={formData.description}
@@ -171,43 +325,53 @@ const MultiStepCourseForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Category *
+            Category <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.category}
             onChange={(e) => handleInputChange("category", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
+            disabled={loading}
           >
             <option value="">Select category</option>
-            <option value="marine-engineering">Marine Engineering</option>
-            <option value="navigation">Navigation</option>
-            <option value="maritime-safety">Maritime Safety</option>
-            <option value="naval-operations">Naval Operations</option>
-            <option value="submarine-operations">Submarine Operations</option>
+            {categories.map(category => (
+              <option key={category._id} value={category._id}>
+                {category.name}
+              </option>
+            ))}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Instructor *
+            Instructor <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.instructor}
             onChange={(e) => handleInputChange("instructor", e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
+            disabled={loading}
           >
             <option value="">Select instructor</option>
-            <option value="instructor-1">Commander Sarah Johnson</option>
-            <option value="instructor-2">Captain Michael Chen</option>
-            <option value="instructor-3">Lieutenant Commander David Rodriguez</option>
+            {instructors.map(instructor => {
+              const user = instructor.userId || {};
+              const name = user.firstName && user.lastName 
+                ? `${user.firstName} ${user.lastName}`
+                : user.username || 'N/A';
+              return (
+                <option key={instructor._id} value={instructor._id}>
+                  {name}
+                </option>
+              );
+            })}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Duration *
+            Duration <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -221,7 +385,7 @@ const MultiStepCourseForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Level *
+            Level <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.level}
@@ -237,36 +401,44 @@ const MultiStepCourseForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Price *
+            Price <span className="text-red-500">*</span>
           </label>
-          <input
-            type="number"
-            value={formData.price}
-            onChange={(e) => handleInputChange("price", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter course price"
-            min="0"
-            required
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+            <input
+              type="number"
+              value={formData.price}
+              onChange={(e) => handleInputChange("price", e.target.value)}
+              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              required
+            />
+          </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Original Price
+            Original Price <span className="text-gray-400 text-xs">(optional)</span>
           </label>
-          <input
-            type="number"
-            value={formData.originalPrice}
-            onChange={(e) => handleInputChange("originalPrice", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter original price"
-            min="0"
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+            <input
+              type="number"
+              value={formData.originalPrice}
+              onChange={(e) => handleInputChange("originalPrice", e.target.value)}
+              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+            />
+          </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Max Students
+            Max Students <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <input
             type="number"
@@ -278,17 +450,39 @@ const MultiStepCourseForm = () => {
           />
         </div>
 
-        <div>
+        <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Course Image
+            Course Image <span className="text-gray-400 text-xs">(optional)</span>
           </label>
-          <input
-            type="text"
-            value={formData.image}
-            onChange={(e) => handleInputChange("image", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Image URL"
-          />
+          <div className="space-y-4">
+            {imagePreview && (
+              <div className="relative w-full max-w-md">
+                <img
+                  src={imagePreview}
+                  alt="Course preview"
+                  className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-2 hover:bg-red-700"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            <div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Supported formats: JPG, PNG, GIF. Max size: 5MB
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -322,21 +516,24 @@ const MultiStepCourseForm = () => {
       
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Prerequisites
+          Prerequisites <span className="text-gray-400 text-xs">(optional)</span>
         </label>
         <textarea
           value={formData.prerequisites}
           onChange={(e) => handleInputChange("prerequisites", e.target.value)}
           rows={3}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          placeholder="Enter course prerequisites"
+          placeholder="Enter prerequisites, one per line or separated by commas"
         />
+        <p className="text-xs text-gray-500 mt-1">
+          Enter each prerequisite on a new line or separate with commas. They will be displayed as bullet points.
+        </p>
       </div>
 
       <div>
         <div className="flex items-center justify-between mb-4">
           <label className="block text-sm font-medium text-gray-700">
-            Learning Objectives
+            Learning Objectives <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <Button
             type="button"
@@ -410,7 +607,7 @@ const MultiStepCourseForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Chapter Title *
+                Chapter Title <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -424,7 +621,7 @@ const MultiStepCourseForm = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Duration
+                Duration <span className="text-gray-400 text-xs">(optional)</span>
               </label>
               <input
                 type="text"
@@ -437,7 +634,7 @@ const MultiStepCourseForm = () => {
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
+                Description <span className="text-gray-400 text-xs">(optional)</span>
               </label>
               <textarea
                 value={chapter.description}
@@ -518,9 +715,19 @@ const MultiStepCourseForm = () => {
                 type="submit"
                 variant="primary"
                 className="flex items-center gap-2"
+                disabled={submitting}
               >
-                <Save className="w-4 h-4" />
-                Create Course
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    {isEdit ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    {isEdit ? 'Update Course' : 'Create Course'}
+                  </>
+                )}
               </Button>
             )}
           </div>

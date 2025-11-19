@@ -1,18 +1,14 @@
 "use client";
 
-import React from "react";
+import React, { use } from "react";
 import { PageBreadcrumb } from "@/components/common";
 import { MultiStepProgramForm } from "@/components/programs";
 
 export default function UpdateProgramPage({ params }) {
-  const { id } = params;
+  const { id } = use(params);
 
-  // In a real app, you would fetch the program data by ID
   const programData = {
-    id: id,
-    title: "Sample Program",
-    description: "Sample description",
-    // ... other program data
+    id: id
   };
 
   return (

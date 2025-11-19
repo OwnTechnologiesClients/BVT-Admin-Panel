@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb, ComponentCard } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
@@ -12,14 +12,15 @@ import {
   Award,
   Calendar,
   FileText,
-  Download,
-  Mail,
   TrendingUp,
   AlertCircle,
   Eye,
   EyeOff,
   Info,
+  Loader2,
 } from "lucide-react";
+import * as testAPI from "@/lib/api/test";
+import * as enrollmentAPI from "@/lib/api/enrollment";
 
 const defaultStudents = [
   {
@@ -150,10 +151,174 @@ const TestDetailsView = ({
   previewNotice,
 }) => {
   const router = useRouter();
-  const [testData] = useState(() => defaultTestData(testId));
+  const [testData, setTestData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedTab, setSelectedTab] = useState("completed");
   const [resultsReleased, setResultsReleased] = useState(false);
-  const [students] = useState(defaultStudents);
+  const [students, setStudents] = useState([]);
+
+  useEffect(() => {
+    const fetchTest = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await testAPI.getTestById(testId);
+        if (response.success) {
+          const test = response.data;
+          const courseId = test.courseId?._id || test.courseId;
+          
+          setTestData({
+            id: test._id || test.id,
+            title: test.title || 'Untitled Test',
+            course: test.courseId?.title || test.courseName || 'N/A',
+            courseId: courseId,
+            description: test.description || '',
+            duration: test.duration || 60,
+            passingScore: test.passingScore || 70,
+            totalQuestions: test.questions?.length || 0,
+            totalStudents: 0, // Will be updated after fetching enrollments
+            completed: 0, // This would come from test results
+            pending: 0, // This would come from test results
+            averageScore: 0, // This would come from test results
+            highestScore: 0, // This would come from test results
+            lowestScore: 0, // This would come from test results
+            isActive: test.isActive !== undefined ? test.isActive : true,
+            randomizeQuestions: test.randomizeQuestions || false,
+            showResults: test.showResults !== undefined ? test.showResults : true,
+            maxAttempts: test.maxAttempts || 0,
+            createdAt: test.createdAt || new Date().toISOString(),
+            createdBy: typeof test.createdBy === 'object' && test.createdBy !== null
+              ? (test.createdBy.fullName || 
+                 (test.createdBy.firstName && test.createdBy.lastName 
+                   ? `${test.createdBy.firstName} ${test.createdBy.lastName}` 
+                   : test.createdBy.email || test.createdBy.username || 'N/A'))
+              : (test.createdBy || 'N/A'),
+            questions: test.questions || []
+          });
+          
+          // Fetch enrolled students for the course
+          if (courseId) {
+            try {
+              const enrollmentsResponse = await enrollmentAPI.getCourseEnrollments(courseId);
+              if (enrollmentsResponse.success) {
+                const enrollments = Array.isArray(enrollmentsResponse.data?.enrollments) 
+                  ? enrollmentsResponse.data.enrollments 
+                  : (Array.isArray(enrollmentsResponse.data) ? enrollmentsResponse.data : []);
+                const enrolledCount = enrollments.length;
+                
+                // Process enrollments to extract student performance data
+                const studentsData = [];
+                let completedCount = 0;
+                let totalScore = 0;
+                let highestScore = 0;
+                let lowestScore = null;
+                
+                enrollments.forEach((enrollment) => {
+                  const student = enrollment.studentId;
+                  if (!student) return;
+                  
+                  // Find test completion data for this test
+                  const testCompletion = enrollment.testsCompleted?.find(
+                    (tc) => {
+                      const tcTestId = tc.testId?._id?.toString() || 
+                                      tc.testId?.toString() || 
+                                      (typeof tc.testId === 'string' ? tc.testId : null);
+                      return tcTestId === testId;
+                    }
+                  );
+                  
+                  const studentName = student.fullName || 
+                                     (student.firstName && student.lastName 
+                                       ? `${student.firstName} ${student.lastName}` 
+                                       : student.email || student.username || 'Unknown');
+                  const studentEmail = student.email || 'N/A';
+                  
+                  if (testCompletion) {
+                    // Student has completed the test
+                    completedCount++;
+                    const score = testCompletion.score || 0;
+                    totalScore += score;
+                    if (score > highestScore) highestScore = score;
+                    if (lowestScore === null || score < lowestScore) lowestScore = score;
+                    
+                    studentsData.push({
+                      id: student._id || student.id || enrollment._id,
+                      name: studentName,
+                      email: studentEmail,
+                      enrollmentDate: enrollment.enrolledAt ? new Date(enrollment.enrolledAt).toISOString().split('T')[0] : 'N/A',
+                      status: 'completed',
+                      score: score,
+                      attempts: testCompletion.attemptNumber || 1,
+                      completedAt: testCompletion.completedAt 
+                        ? new Date(testCompletion.completedAt).toLocaleString('en-US', {
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        : null,
+                      timeSpent: null, // Not stored in enrollment model
+                      passed: testCompletion.passed || false
+                    });
+                  } else {
+                    // Student hasn't completed the test yet
+                    studentsData.push({
+                      id: student._id || student.id || enrollment._id,
+                      name: studentName,
+                      email: studentEmail,
+                      enrollmentDate: enrollment.enrolledAt ? new Date(enrollment.enrolledAt).toISOString().split('T')[0] : 'N/A',
+                      status: 'pending',
+                      score: null,
+                      attempts: 0,
+                      completedAt: null,
+                      timeSpent: null,
+                      passed: null
+                    });
+                  }
+                });
+                
+                const averageScore = completedCount > 0 ? totalScore / completedCount : 0;
+                const pendingCount = enrolledCount - completedCount;
+                
+                setStudents(studentsData);
+                setTestData(prev => ({
+                  ...prev,
+                  totalStudents: enrolledCount,
+                  completed: completedCount,
+                  pending: pendingCount,
+                  averageScore: averageScore,
+                  highestScore: completedCount > 0 ? highestScore : 0,
+                  lowestScore: completedCount > 0 && lowestScore !== null ? lowestScore : 0
+                }));
+              }
+            } catch (err) {
+              console.log('Could not fetch course enrollments:', err);
+            }
+          }
+        } else {
+          setError(response.message || 'Test not found');
+          // Fallback to default data for preview
+          setTestData(defaultTestData(testId));
+        }
+      } catch (err) {
+        console.error('Error fetching test:', err);
+        setError(err.message || 'Failed to fetch test');
+        // Fallback to default data for preview
+        setTestData(defaultTestData(testId));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (testId) {
+      fetchTest();
+    } else {
+      setTestData(defaultTestData(testId));
+      setLoading(false);
+    }
+  }, [testId]);
 
   const filteredStudents = useMemo(() => {
     if (selectedTab === "all") return students;
@@ -164,10 +329,9 @@ const TestDetailsView = ({
   const failedCount = students.filter(
     (s) => s.status === "completed" && s.passed === false
   ).length;
-  const completionRate = (
-    (testData.completed / testData.totalStudents) *
-    100
-  ).toFixed(1);
+  const completionRate = testData && testData.totalStudents > 0
+    ? ((testData.completed / testData.totalStudents) * 100).toFixed(1)
+    : '0.0';
 
   const handleEditQuestions = () => {
     router.push(`${basePath}/${testId}/questions/edit`);
@@ -177,15 +341,36 @@ const TestDetailsView = ({
     router.push(`${basePath}/${testId}/questions/view`);
   };
 
-  const handleExport = () => {
-    alert("Preview mode: export functionality will be enabled with backend.");
-  };
 
-  const handleNotifyPending = () => {
-    alert(
-      "Preview mode: notifications will be enabled once communication services are connected."
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
     );
-  };
+  }
+
+  if (error && !testData) {
+    return (
+      <div className="space-y-6">
+        <PageBreadcrumb
+          pageTitle="Test Details"
+          homeHref={breadcrumbProps?.homeHref}
+          homeLabel={breadcrumbProps?.homeLabel}
+          trail={breadcrumbProps?.trail || []}
+          items={breadcrumbProps?.items}
+        />
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <h1 className="text-xl font-bold text-red-600 mb-2">Error</h1>
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!testData) {
+    return null;
+  }
 
   const { trail: incomingTrail = [], ...restBreadcrumb } = breadcrumbProps || {};
   const breadcrumbTrail = [...incomingTrail, { label: testData.title }];
@@ -222,19 +407,11 @@ const TestDetailsView = ({
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
-            onClick={handleExport}
+            onClick={() => router.push(`${basePath}/${testId}/edit`)}
             className="flex items-center gap-2"
           >
-            <Download className="h-4 w-4" />
-            Export Results
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleNotifyPending}
-            className="flex items-center gap-2"
-          >
-            <Mail className="h-4 w-4" />
-            Notify Pending
+            <FileText className="h-4 w-4" />
+            Edit Test
           </Button>
           <Button
             variant="primary"
@@ -289,7 +466,7 @@ const TestDetailsView = ({
               <AlertCircle className="h-5 w-5 text-orange-600" />
             </div>
             <span className="text-sm text-gray-500">
-              {((testData.pending / testData.totalStudents) * 100).toFixed(0)}%
+              {testData.totalStudents > 0 ? ((testData.pending / testData.totalStudents) * 100).toFixed(0) : '0'}%
             </span>
           </div>
           <div className="text-2xl font-bold text-gray-900">
@@ -306,7 +483,7 @@ const TestDetailsView = ({
             <span className="text-sm text-gray-500">Average</span>
           </div>
           <div className="text-2xl font-bold text-gray-900">
-            {testData.averageScore.toFixed(1)}%
+            {testData.averageScore ? testData.averageScore.toFixed(1) : '0.0'}%
           </div>
           <p className="mt-1 text-xs text-gray-600">Score</p>
         </div>
@@ -357,7 +534,7 @@ const TestDetailsView = ({
             <div>
               <p className="text-sm text-gray-600">Created</p>
               <p className="text-base font-semibold text-gray-900">
-                {testData.createdAt}
+                {testData.createdAt ? new Date(testData.createdAt).toLocaleDateString() : 'N/A'}
               </p>
             </div>
           </div>
@@ -437,19 +614,19 @@ const TestDetailsView = ({
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Highest Score</span>
               <span className="text-lg font-bold text-green-600">
-                {testData.highestScore}%
+                {testData.highestScore ? testData.highestScore : '0'}%
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Average Score</span>
               <span className="text-lg font-bold text-blue-600">
-                {testData.averageScore.toFixed(1)}%
+                {testData.averageScore ? testData.averageScore.toFixed(1) : '0.0'}%
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-600">Lowest Score</span>
               <span className="text-lg font-bold text-red-600">
-                {testData.lowestScore}%
+                {testData.lowestScore ? testData.lowestScore : '0'}%
               </span>
             </div>
           </div>
@@ -481,15 +658,15 @@ const TestDetailsView = ({
                 <div
                   className="h-3 rounded-full bg-green-600 transition-all"
                   style={{
-                    width: `${(
+                    width: `${testData.completed > 0 ? (
                       (passedCount / testData.completed) *
                       100
-                    ).toFixed(0)}%`,
+                    ).toFixed(0) : 0}%`,
                   }}
                 ></div>
               </div>
               <div className="mt-1 text-right text-sm font-semibold text-gray-900">
-                {((passedCount / testData.completed) * 100).toFixed(1)}%
+                {testData.completed > 0 ? ((passedCount / testData.completed) * 100).toFixed(1) : '0.0'}%
               </div>
             </div>
           </div>
@@ -507,7 +684,7 @@ const TestDetailsView = ({
               <div className="h-3 w-full rounded-full bg-gray-200">
                 <div
                   className="h-3 rounded-full bg-blue-600 transition-all"
-                  style={{ width: `${completionRate}%` }}
+                  style={{ width: `${parseFloat(completionRate) || 0}%` }}
                 ></div>
               </div>
               <div className="mt-1 text-right text-sm font-semibold text-gray-900">

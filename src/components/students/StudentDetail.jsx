@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { ComponentCard } from "@/components/common/ComponentCard";
 import { Badge, Button } from "@/components/ui";
-import { availableCoursesMock } from "@/data/studentsMockData";
+import { getAllCourses } from "@/lib/api/course";
+import { getStudentEnrollments, createEnrollment, deleteEnrollment } from "@/lib/api/enrollment";
 
 const InfoRow = ({ label, value }) => (
   <div>
@@ -23,41 +24,190 @@ const courseStatusColors = {
 
 const StudentDetail = ({ student }) => {
   const [activeTab, setActiveTab] = useState("info");
-  const [courses, setCourses] = useState(student.courses || []);
+  const [enrollments, setEnrollments] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [loadingCourses, setLoadingCourses] = useState(false);
+  const [loadingEnrollments, setLoadingEnrollments] = useState(false);
   const [showAddCourse, setShowAddCourse] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState("");
   const [enrollmentDate, setEnrollmentDate] = useState("");
+  const [error, setError] = useState(null);
+  const [imageError, setImageError] = useState(false);
 
-  const remainingCourses = useMemo(() => {
-    const existingIds = new Set(courses.map((course) => course.id));
-    return availableCoursesMock.filter((course) => !existingIds.has(course.id));
-  }, [courses]);
+  // Helper to get image URL
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+      return imagePath;
+    }
+    if (imagePath.startsWith("/uploads") || imagePath.startsWith("/images")) {
+      return process.env.NEXT_PUBLIC_API_URL 
+        ? `${process.env.NEXT_PUBLIC_API_URL}${imagePath}`
+        : `http://localhost:5000${imagePath}`;
+    }
+    return imagePath;
+  };
 
-  const handleAddCourse = (event) => {
-    event.preventDefault();
-    const selectedCourse = remainingCourses.find(
-      (course) => course.id === selectedCourseId
-    );
-    if (!selectedCourse) return;
+  const imageUrl = getImageUrl(student?.image || student?.profilePic);
 
-    const newCourse = {
-      id: selectedCourse.id,
-      title: selectedCourse.title,
-      category: selectedCourse.category,
-      instructor: selectedCourse.instructor,
-      enrollmentDate: enrollmentDate || new Date().toISOString().slice(0, 10),
-      status: "In Progress",
-      progress: 0,
-      modulesCompleted: 0,
-      totalModules: 10,
-      lastActive: null,
-      nextMilestone: "Orientation Session",
+  // Fetch student enrollments from API
+  useEffect(() => {
+    const fetchEnrollments = async () => {
+      if (!student?._id) return;
+
+      try {
+        setLoadingEnrollments(true);
+        setError(null);
+        const response = await getStudentEnrollments(student._id);
+        
+        if (response.success) {
+          const enrollmentsList = response.data?.enrollments || [];
+          setEnrollments(enrollmentsList);
+          
+          // Transform enrollments to course format for display
+          const coursesList = enrollmentsList.map((enrollment) => {
+            const course = enrollment.courseId;
+            return {
+              _id: enrollment._id,
+              enrollmentId: enrollment._id,
+              id: course._id || course.id,
+              courseId: course._id || course.id,
+              slug: course.slug, // Include slug for URL navigation
+              title: course.title || course.name,
+              category: typeof course.category === 'object' ? course.category?.name : course.category || 'General',
+              instructor: typeof course.instructor === 'object' 
+                ? (course.instructor?.userId?.firstName && course.instructor?.userId?.lastName
+                  ? `${course.instructor.userId.firstName} ${course.instructor.userId.lastName}`
+                  : course.instructor?.userId?.email || 'TBA')
+                : course.instructor || 'TBA',
+              enrollmentDate: new Date(enrollment.enrolledAt).toISOString().slice(0, 10),
+              status: enrollment.status === 'active' ? 'In Progress' : enrollment.status === 'completed' ? 'Completed' : enrollment.status,
+              progress: enrollment.progress || 0,
+              completedAt: enrollment.completedAt
+            };
+          });
+          setCourses(coursesList);
+        } else {
+          setError(response.message || "Failed to fetch enrollments");
+        }
+      } catch (err) {
+        console.error("Error fetching enrollments:", err);
+        setError(err.message || "An error occurred while fetching enrollments");
+      } finally {
+        setLoadingEnrollments(false);
+      }
     };
 
-    setCourses((prev) => [...prev, newCourse]);
-    setSelectedCourseId("");
-    setEnrollmentDate("");
-    setShowAddCourse(false);
+    fetchEnrollments();
+  }, [student?._id]);
+
+  // Fetch available courses from API
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setLoadingCourses(true);
+        const response = await getAllCourses({ limit: 1000 }); // Get all courses
+        
+        if (response.success) {
+          // Handle different response structures
+          const coursesList = response.data?.courses || response.data || [];
+          setAvailableCourses(coursesList);
+        } else {
+          console.error("Failed to fetch courses:", response.message);
+        }
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
+  const remainingCourses = useMemo(() => {
+    const existingIds = new Set(courses.map((course) => course._id || course.id));
+    return availableCourses.filter((course) => !existingIds.has(course._id || course.id));
+  }, [courses, availableCourses]);
+
+  const handleAddCourse = async (event) => {
+    event.preventDefault();
+    if (!selectedCourseId || !student?._id) return;
+
+    try {
+      setError(null);
+      setLoadingCourses(true);
+
+      const response = await createEnrollment({
+        studentId: student._id,
+        courseId: selectedCourseId,
+        status: 'active',
+        notes: enrollmentDate ? `Enrolled on ${enrollmentDate}` : undefined
+      });
+
+      if (response.success) {
+        const enrollment = response.data?.enrollment;
+        const course = enrollment.courseId;
+        
+        // Add to local state
+        const newEnrollment = {
+          _id: enrollment._id,
+          enrollmentId: enrollment._id,
+          id: course._id || course.id,
+          courseId: course._id || course.id,
+          title: course.title || course.name,
+          category: typeof course.category === 'object' ? course.category?.name : course.category || 'General',
+          instructor: typeof course.instructor === 'object' 
+            ? (course.instructor?.userId?.firstName && course.instructor?.userId?.lastName
+              ? `${course.instructor.userId.firstName} ${course.instructor.userId.lastName}`
+              : course.instructor?.userId?.email || 'TBA')
+            : course.instructor || 'TBA',
+          enrollmentDate: new Date(enrollment.enrolledAt).toISOString().slice(0, 10),
+          status: enrollment.status === 'active' ? 'In Progress' : enrollment.status,
+          progress: enrollment.progress || 0,
+        };
+
+        setCourses((prev) => [...prev, newEnrollment]);
+        setEnrollments((prev) => [...prev, enrollment]);
+        setSelectedCourseId("");
+        setEnrollmentDate("");
+        setShowAddCourse(false);
+      } else {
+        setError(response.message || "Failed to enroll student in course");
+      }
+    } catch (err) {
+      console.error("Error creating enrollment:", err);
+      setError(err.message || "An error occurred while enrolling student");
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  const handleRemoveCourse = async (enrollmentId) => {
+    if (!confirm("Are you sure you want to unenroll this student from the course?")) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setLoadingCourses(true);
+
+      const response = await deleteEnrollment(enrollmentId);
+
+      if (response.success) {
+        // Remove from local state
+        setCourses((prev) => prev.filter((c) => c.enrollmentId !== enrollmentId));
+        setEnrollments((prev) => prev.filter((e) => e._id !== enrollmentId));
+      } else {
+        setError(response.message || "Failed to unenroll student");
+      }
+    } catch (err) {
+      console.error("Error deleting enrollment:", err);
+      setError(err.message || "An error occurred while unenrolling student");
+    } finally {
+      setLoadingCourses(false);
+    }
   };
 
   return (
@@ -65,13 +215,24 @@ const StudentDetail = ({ student }) => {
       <ComponentCard title="Student Overview">
         <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-500 text-white shadow-lg flex items-center justify-center text-lg font-semibold">
-              {student.fullName
-                .split(" ")
-                .slice(0, 2)
-                .map((name) => name.charAt(0))
-                .join("")}
-            </div>
+            {imageUrl && !imageError ? (
+              <img
+                src={imageUrl}
+                alt={student.fullName}
+                className="h-16 w-16 rounded-full object-cover border-2 border-gray-200 shadow-lg"
+                onError={() => {
+                  setImageError(true);
+                }}
+              />
+            ) : (
+              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-600 to-indigo-500 text-white shadow-lg flex items-center justify-center text-lg font-semibold">
+                {student.fullName
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((name) => name.charAt(0))
+                  .join("")}
+              </div>
+            )}
             <div>
               <p className="text-lg font-semibold text-gray-900">
                 {student.fullName}
@@ -126,33 +287,43 @@ const StudentDetail = ({ student }) => {
             <InfoRow label="Branch" value={student.branch} />
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-            <ComponentCard title="Address" className="bg-gray-50">
-              <p className="text-sm text-gray-700">
-                {student.address.street}
-                <br />
-                {student.address.city}, {student.address.state}{" "}
-                {student.address.postalCode}
-                <br />
-                {student.address.country}
-              </p>
-            </ComponentCard>
-            <ComponentCard title="Emergency Contact" className="bg-gray-50">
-              <p className="text-sm text-gray-700">
-                {student.emergencyContact.name}
-                <br />
-                Relation: {student.emergencyContact.relation}
-                <br />
-                {student.emergencyContact.phone}
-              </p>
-            </ComponentCard>
-          </div>
+          {(student.address || student.emergencyContact) && (
+            <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+              {student.address && (
+                <ComponentCard title="Address" className="bg-gray-50">
+                  <p className="text-sm text-gray-700">
+                    {student.address.street || ""}
+                    {student.address.street && <br />}
+                    {[student.address.city, student.address.state]
+                      .filter(Boolean)
+                      .join(", ")}{" "}
+                    {student.address.postalCode || ""}
+                    {(student.address.city || student.address.state || student.address.postalCode) && <br />}
+                    {student.address.country || ""}
+                  </p>
+                </ComponentCard>
+              )}
+              {student.emergencyContact && (
+                <ComponentCard title="Emergency Contact" className="bg-gray-50">
+                  <p className="text-sm text-gray-700">
+                    {student.emergencyContact.name || "N/A"}
+                    {student.emergencyContact.name && <br />}
+                    {student.emergencyContact.relation && (
+                      <>Relation: {student.emergencyContact.relation}<br /></>
+                    )}
+                    {student.emergencyContact.phone || ""}
+                  </p>
+                </ComponentCard>
+              )}
+            </div>
+          )}
 
+          {student.documents && student.documents.length > 0 && (
             <ComponentCard title="Documents" className="mt-6">
               <div className="space-y-3">
-                {student.documents.map((doc) => (
+                {student.documents.map((doc, index) => (
                   <div
-                    key={doc.id}
+                    key={doc._id || doc.id || index}
                     className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3"
                   >
                     <div>
@@ -167,20 +338,23 @@ const StudentDetail = ({ student }) => {
                           doc.status === "Verified" ? "success" : "warning"
                         }
                       >
-                        {doc.status}
+                        {doc.status || "Pending"}
                       </Badge>
-                      <p className="text-xs text-gray-400">
-                        Uploaded{" "}
-                        {new Date(doc.uploadedAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
+                      {doc.uploadedAt && (
+                        <p className="text-xs text-gray-400">
+                          Uploaded{" "}
+                          {new Date(doc.uploadedAt).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                          })}
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </ComponentCard>
+          )}
 
           {student.notes && (
             <ComponentCard title="Notes" className="mt-6 bg-gray-50">
@@ -192,6 +366,12 @@ const StudentDetail = ({ student }) => {
 
       {activeTab === "courses" && (
         <ComponentCard title="Course Progress" className="space-y-4">
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm text-gray-600">
               Manage the student's enrollments and track progress.
@@ -200,6 +380,7 @@ const StudentDetail = ({ student }) => {
               variant="outline"
               size="sm"
               onClick={() => setShowAddCourse((prev) => !prev)}
+              disabled={loadingEnrollments || loadingCourses}
             >
               {showAddCourse ? "Cancel" : "Add Course"}
             </Button>
@@ -220,11 +401,17 @@ const StudentDetail = ({ student }) => {
                     onChange={(event) => setSelectedCourseId(event.target.value)}
                     className="mt-1 w-full rounded-xl border border-blue-200 px-3 py-2 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
                     required
+                    disabled={loadingCourses}
                   >
-                    <option value="">Select course</option>
+                    <option value="">
+                      {loadingCourses ? "Loading courses..." : remainingCourses.length === 0 ? "No courses available" : "Select course"}
+                    </option>
+                    {remainingCourses.length === 0 && !loadingCourses && (
+                      <option disabled>No courses available to add</option>
+                    )}
                     {remainingCourses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.title}
+                      <option key={course._id || course.id} value={course._id || course.id}>
+                        {course.title || course.name || 'Untitled Course'}
                       </option>
                     ))}
                   </select>
@@ -241,32 +428,43 @@ const StudentDetail = ({ student }) => {
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button type="submit" variant="primary" className="w-full">
-                    Add Enrollment
+                  <Button 
+                    type="submit" 
+                    variant="primary" 
+                    className="w-full"
+                    disabled={loadingCourses || !selectedCourseId}
+                  >
+                    {loadingCourses ? "Enrolling..." : "Add Enrollment"}
                   </Button>
                 </div>
               </div>
             </form>
           )}
 
-          {courses.length === 0 ? (
+          {loadingEnrollments ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center">
+                <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-600 border-r-transparent"></div>
+                <p className="mt-2 text-sm text-gray-600">Loading enrollments...</p>
+              </div>
+            </div>
+          ) : courses.length === 0 ? (
             <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 py-8 text-center text-gray-600">
-              No courses assigned yet. Use “Add Course” to include a test
-              enrollment.
+              No courses assigned yet. Use "Add Course" to enroll the student in a course.
             </div>
           ) : (
             <div className="space-y-4">
               {courses.map((course) => (
                 <div
-                  key={course.id}
+                  key={course.enrollmentId || course._id || course.id}
                   className="flex flex-col gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"
                 >
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-gray-900">
-                      {course.title}
+                      {course.title || course.name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {course.category} • {course.instructor}
+                      {typeof course.category === 'string' ? course.category : course.category?.name || 'General'} • {typeof course.instructor === 'string' ? course.instructor : course.instructor?.fullName || 'TBA'}
                     </p>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span>
@@ -303,11 +501,25 @@ const StudentDetail = ({ student }) => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() =>
-                        (window.location.href = `/students/${student.id}/courses/${course.id}`)
-                      }
+                      onClick={() => {
+                        const courseSlug = course.slug;
+                        if (courseSlug) {
+                          window.location.href = `/students/${student._id || student.id}/courses/${courseSlug}`;
+                        } else {
+                          console.error('Course slug not available');
+                        }
+                      }}
                     >
                       View Progress
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRemoveCourse(course.enrollmentId)}
+                      disabled={loadingCourses}
+                      className="text-red-600 hover:text-red-800 hover:border-red-300"
+                    >
+                      Remove
                     </Button>
                   </div>
                 </div>

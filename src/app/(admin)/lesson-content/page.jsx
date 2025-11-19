@@ -1,130 +1,109 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { Plus, Trash2, Edit, Eye, Video, FileText, Upload } from "lucide-react";
+import { Plus, Trash2, Edit, Eye, Video, FileText, Upload, Loader2 } from "lucide-react";
+import * as lessonContentAPI from "@/lib/api/lessonContent";
+import * as lessonAPI from "@/lib/api/lesson";
 
 export default function LessonContentPage() {
-  const [contents, setContents] = useState([
-    {
-      id: 1,
-      lessonId: 1,
-      lessonName: "Course Overview",
-      chapterName: "Getting Started",
-      courseName: "Advanced Naval Engineering Workshop",
-      title: "Introduction Video",
-      description: "Course introduction and overview video",
-      order: 1,
-      contentType: "mixed",
-      video: {
-        filePath: "/uploads/videos/intro.mp4",
-        fileName: "intro.mp4",
-        duration: 300
-      },
-      document: {
-        filePath: "/uploads/documents/overview.pdf",
-        fileName: "overview.pdf",
-        extractedText: "Course Overview Document\n\nThis course covers advanced naval engineering principles...",
-        pageCount: 5
-      },
-      isRequired: true,
-      isActive: true,
-      createdAt: "2024-01-15"
-    },
-    {
-      id: 2,
-      lessonId: 1,
-      lessonName: "Course Overview",
-      chapterName: "Getting Started",
-      courseName: "Advanced Naval Engineering Workshop",
-      title: "Course Materials",
-      description: "Essential reading materials for the course",
-      order: 2,
-      contentType: "document",
-      video: null,
-      document: {
-        filePath: "/uploads/documents/materials.pdf",
-        fileName: "materials.pdf",
-        extractedText: "Course Materials\n\nRequired reading materials and resources...",
-        pageCount: 12
-      },
-      isRequired: true,
-      isActive: true,
-      createdAt: "2024-01-15"
-    },
-    {
-      id: 3,
-      lessonId: 2,
-      lessonName: "Introduction to Naval Engineering",
-      chapterName: "Getting Started",
-      courseName: "Advanced Naval Engineering Workshop",
-      title: "Engineering Principles Video",
-      description: "Video explaining basic naval engineering principles",
-      order: 1,
-      contentType: "video",
-      video: {
-        filePath: "/uploads/videos/principles.mp4",
-        fileName: "principles.mp4",
-        duration: 450
-      },
-      document: null,
-      isRequired: true,
-      isActive: true,
-      createdAt: "2024-01-15"
-    }
-  ]);
-
+  const router = useRouter();
+  const [contents, setContents] = useState([]);
+  const [lessons, setLessons] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterLesson, setFilterLesson] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
 
-  const lessons = ["All", "Course Overview", "Introduction to Naval Engineering"];
-  const contentTypes = ["All", "video", "document", "mixed"];
+  // Fetch lesson contents
+  const fetchLessonContents = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await lessonContentAPI.getAllLessonContents({ limit: 100 });
+      if (response.success) {
+        setContents(response.data || []);
+      } else {
+        setError(response.message || 'Failed to fetch lesson contents');
+      }
+    } catch (err) {
+      console.error('Error fetching lesson contents:', err);
+      setError(err.message || 'Failed to fetch lesson contents');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Fetch lessons for filter
+  const fetchLessons = async () => {
+    try {
+      const response = await lessonAPI.getAllLessons({ limit: 100 });
+      if (response.success) {
+        setLessons(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching lessons:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchLessonContents();
+    fetchLessons();
+  }, []);
+
+  // Determine content type from video/document presence
+  const getContentType = (content) => {
+    const hasVideo = content.video && (content.video.filePath || content.video.fileName);
+    const hasDocument = content.document && (content.document.filePath || content.document.fileName);
+    
+    if (hasVideo && hasDocument) return "mixed";
+    if (hasVideo) return "video";
+    if (hasDocument) return "document";
+    return "none";
+  };
+
+  // Filter contents
   const filteredContents = contents.filter(content => {
-    const matchesSearch = content.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         content.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLesson = filterLesson === "" || content.lessonName === filterLesson;
-    const matchesType = filterType === "" || content.contentType === filterType;
+    const matchesSearch = 
+      (content.title?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
+      (content.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
+    
+    const lessonName = content.lessonId?.title || content.lessonId || "";
+    const matchesLesson = filterLesson === "" || lessonName === filterLesson;
+    
+    const contentType = getContentType(content);
+    const matchesType = filterType === "" || contentType === filterType;
+    
     return matchesSearch && matchesLesson && matchesType;
   });
 
-  const addContent = () => {
-    const newContent = {
-      id: contents.length + 1,
-      lessonId: 1,
-      lessonName: "Course Overview",
-      chapterName: "Getting Started",
-      courseName: "Advanced Naval Engineering Workshop",
-      title: "",
-      description: "",
-      order: contents.length + 1,
-      contentType: "video",
-      video: null,
-      document: null,
-      isRequired: true,
-      isActive: true,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    setContents([...contents, newContent]);
-  };
+  const handleDelete = async (contentId) => {
+    if (!confirm("Are you sure you want to delete this lesson content?")) {
+      return;
+    }
 
-  const updateContent = (contentId, field, value) => {
-    setContents(contents.map(content => 
-      content.id === contentId 
-        ? { ...content, [field]: value }
-        : content
-    ));
-  };
-
-  const deleteContent = (contentId) => {
-    if (confirm("Are you sure you want to delete this content?")) {
-      setContents(contents.filter(content => content.id !== contentId));
+    try {
+      setDeletingId(contentId);
+      const response = await lessonContentAPI.deleteLessonContent(contentId);
+      if (response.success) {
+        await fetchLessonContents();
+      } else {
+        alert(response.message || 'Failed to delete lesson content');
+      }
+    } catch (err) {
+      console.error('Error deleting lesson content:', err);
+      alert(err.message || 'Failed to delete lesson content');
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const formatDuration = (seconds) => {
+    if (!seconds) return "N/A";
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
@@ -148,13 +127,61 @@ export default function LessonContentPage() {
     }
   };
 
+  // Get unique lesson names for filter
+  const uniqueLessons = Array.from(
+    new Set(
+      contents
+        .map(c => c.lessonId?.title || c.lessonId || "")
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const contentTypes = ["All", "video", "document", "mixed"];
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <PageBreadcrumb 
+          pageTitle="Lesson Content Management"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Lesson Content", href: "/lesson-content" }
+          ]}
+        />
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <PageBreadcrumb 
+          pageTitle="Lesson Content Management"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Lesson Content", href: "/lesson-content" }
+          ]}
+        />
+        <div className="bg-white rounded-lg border border-red-200 p-6">
+          <p className="text-red-600">{error}</p>
+          <Button variant="outline" onClick={fetchLessonContents} className="mt-4">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <PageBreadcrumb 
         pageTitle="Lesson Content Management"
         breadcrumbs={[
-          { label: "Home", href: "/admin/dashboard" },
-          { label: "Lesson Content", href: "/admin/lesson-content" }
+          { label: "Home", href: "/" },
+          { label: "Lesson Content", href: "/lesson-content" }
         ]}
       />
 
@@ -165,7 +192,7 @@ export default function LessonContentPage() {
           <p className="text-gray-600">Manage videos, documents, and other lesson content</p>
         </div>
         <Button
-          onClick={addContent}
+          onClick={() => router.push('/lesson-content/add')}
           className="flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -191,8 +218,9 @@ export default function LessonContentPage() {
               onChange={(e) => setFilterLesson(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {lessons.map(lesson => (
-                <option key={lesson} value={lesson === "All" ? "" : lesson}>
+              <option value="">All Lessons</option>
+              {uniqueLessons.map(lesson => (
+                <option key={lesson} value={lesson}>
                   {lesson}
                 </option>
               ))}
@@ -233,7 +261,10 @@ export default function LessonContentPage() {
             <div>
               <p className="text-sm text-gray-600">Videos</p>
               <p className="text-2xl font-bold text-blue-600">
-                {contents.filter(c => c.contentType === "video" || c.contentType === "mixed").length}
+                {contents.filter(c => {
+                  const type = getContentType(c);
+                  return type === "video" || type === "mixed";
+                }).length}
               </p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -247,7 +278,10 @@ export default function LessonContentPage() {
             <div>
               <p className="text-sm text-gray-600">Documents</p>
               <p className="text-2xl font-bold text-green-600">
-                {contents.filter(c => c.contentType === "document" || c.contentType === "mixed").length}
+                {contents.filter(c => {
+                  const type = getContentType(c);
+                  return type === "document" || type === "mixed";
+                }).length}
               </p>
             </div>
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -273,6 +307,11 @@ export default function LessonContentPage() {
 
       {/* Content Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        {filteredContents.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">
+            {contents.length === 0 ? "No lesson content found. Add your first content!" : "No content matches your filters."}
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -286,35 +325,48 @@ export default function LessonContentPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredContents.map((content) => (
-                <tr key={content.id} className="border-b border-gray-100 hover:bg-gray-50">
+                {filteredContents.map((content) => {
+                  const contentType = getContentType(content);
+                  const lessonName = content.lessonId?.title || content.lessonId || "N/A";
+                  const courseName = content.courseId?.title || content.courseId || "N/A";
+                  const chapterName = content.chapterId?.title || content.chapterId || "N/A";
+                  
+                  return (
+                    <tr key={content._id || content.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-4 px-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{content.title || "Untitled"}</p>
+                          <p className="text-sm text-gray-600">{content.description || "No description"}</p>
+                        </div>
+                      </td>
                   <td className="py-4 px-4">
                     <div>
-                      <p className="font-medium text-gray-900">{content.title}</p>
-                      <p className="text-sm text-gray-600">{content.description}</p>
+                          <p className="text-gray-900">{lessonName}</p>
+                          <p className="text-xs text-gray-500">{courseName} / {chapterName}</p>
                     </div>
                   </td>
-                  <td className="py-4 px-4 text-gray-900">{content.lessonName}</td>
                   <td className="py-4 px-4">
-                    <Badge color={getContentTypeColor(content.contentType)}>
+                        <Badge color={getContentTypeColor(contentType)}>
                       <div className="flex items-center gap-1">
-                        {getContentTypeIcon(content.contentType)}
-                        {content.contentType}
+                            {getContentTypeIcon(contentType)}
+                            {contentType}
                       </div>
                     </Badge>
                   </td>
                   <td className="py-4 px-4">
                     <div className="space-y-1">
-                      {content.video && (
+                          {content.video && (content.video.filePath || content.video.fileName) && (
                         <div className="flex items-center gap-1 text-sm text-blue-600">
                           <Video className="w-3 h-3" />
-                          {content.video.fileName} ({formatDuration(content.video.duration)})
+                              {content.video.fileName || "Video"} 
+                              {content.video.duration && ` (${formatDuration(content.video.duration)})`}
                         </div>
                       )}
-                      {content.document && (
+                          {content.document && (content.document.filePath || content.document.fileName) && (
                         <div className="flex items-center gap-1 text-sm text-green-600">
                           <FileText className="w-3 h-3" />
-                          {content.document.fileName} ({content.document.pageCount} pages)
+                              {content.document.fileName || "Document"}
+                              {content.document.pageCount && ` (${content.document.pageCount} pages)`}
                         </div>
                       )}
                     </div>
@@ -331,27 +383,44 @@ export default function LessonContentPage() {
                   </td>
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => router.push(`/lesson-content/${content._id || content.id}/view`)}
+                            className="text-gray-700 hover:text-gray-900"
+                          >
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => router.push(`/lesson-content/${content._id || content.id}/edit`)}
+                            className="text-gray-700 hover:text-gray-900"
+                          >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => deleteContent(content.id)}
-                        className="text-red-600 hover:text-red-700"
+                            onClick={() => handleDelete(content._id || content.id)}
+                            disabled={deletingId === (content._id || content.id)}
+                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
                       >
+                            {deletingId === (content._id || content.id) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
                         <Trash2 className="w-4 h-4" />
+                            )}
                       </Button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                  );
+                })}
             </tbody>
           </table>
         </div>
+        )}
       </div>
     </div>
   );

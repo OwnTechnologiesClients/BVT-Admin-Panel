@@ -1,96 +1,170 @@
 "use client";
 
-import React from "react";
+import React, { use, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { ArrowLeft, Edit, Trash2, Users, Calendar, DollarSign, Clock } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Users, Calendar, DollarSign, Clock, Loader2 } from "lucide-react";
+import * as courseAPI from "@/lib/api/course";
 
 export default function CourseDetailsPage({ params }) {
-  const { id } = params;
+  const router = useRouter();
+  const { id } = use(params);
+  const [courseData, setCourseData] = useState(null);
+  const [chapters, setChapters] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
-  // In a real app, you would fetch the course data by ID
-  const courseData = {
-    id: id,
-    title: "Advanced Naval Engineering Workshop",
-    slug: "advanced-naval-engineering-workshop",
-    description: "Comprehensive workshop covering advanced naval engineering principles, ship systems, and modern technologies used in naval vessels.",
-    category: "Marine Engineering",
-    instructor: "Commander James Rodriguez",
-    duration: "5 days",
-    level: "Advanced",
-    price: 2500,
-    originalPrice: 3000,
-    image: "/images/course-placeholder.jpg",
-    isFeatured: true,
-    isOnline: false,
-    maxStudents: 25,
-    prerequisites: "Basic knowledge of marine engineering principles",
-    learningObjectives: [
-      "Understand advanced naval engineering concepts",
-      "Learn modern ship system technologies",
-      "Master troubleshooting techniques",
-      "Apply engineering principles to real-world scenarios"
-    ],
-    status: "Active",
-    createdAt: "2024-01-15",
-    updatedAt: "2024-01-20",
-    studentsCount: 15,
-    chaptersCount: 8,
-    lessonsCount: 24
+  // Fetch course data
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await courseAPI.getCourseWithStructure(id);
+        if (response.success) {
+          setCourseData(response.data.course);
+          setChapters(response.data.structure?.chapters || []);
+        } else {
+          setError(response.message || 'Course not found');
+        }
+      } catch (err) {
+        console.error('Error fetching course:', err);
+        setError(err.message || 'Failed to fetch course');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchCourse();
+    }
+  }, [id]);
+
+  // Handle delete
+  const handleDelete = async () => {
+    if (!confirm(`Are you sure you want to delete "${courseData?.title}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const response = await courseAPI.deleteCourse(id);
+      if (response.success) {
+        router.push('/courses');
+      } else {
+        alert(response.message || 'Failed to delete course');
+      }
+    } catch (err) {
+      alert(err.message || 'Failed to delete course');
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const chapters = [
-    {
-      id: 1,
-      title: "Introduction to Naval Engineering",
-      description: "Overview of naval engineering principles",
-      order: 1,
-      duration: "2 hours",
-      lessonsCount: 3
-    },
-    {
-      id: 2,
-      title: "Ship Propulsion Systems",
-      description: "Understanding modern propulsion technologies",
-      order: 2,
-      duration: "3 hours",
-      lessonsCount: 4
-    },
-    {
-      id: 3,
-      title: "Electrical Systems",
-      description: "Naval electrical systems and power distribution",
-      order: 3,
-      duration: "2.5 hours",
-      lessonsCount: 3
-    }
-  ];
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (error || !courseData) {
+    return (
+      <div className="max-w-xl mx-auto p-8">
+        <PageBreadcrumb 
+          pageTitle="Course Details"
+          breadcrumbs={[
+            { label: "Home", href: "/" },
+            { label: "Courses", href: "/courses" },
+            { label: "Course Details", href: `/courses/details/${id}` }
+          ]}
+        />
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6 mt-6">
+          <h1 className="text-xl font-bold text-red-600 mb-2">Error</h1>
+          <p className="text-red-600">{error || 'Course not found'}</p>
+          <Button 
+            variant="outline" 
+            className="mt-4"
+            onClick={() => router.push('/courses')}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Courses
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Extract instructor name
+  const instructor = courseData.instructor?.userId || {};
+  const instructorName = instructor.firstName && instructor.lastName
+    ? `${instructor.firstName} ${instructor.lastName}`
+    : instructor.username || 'N/A';
+
+  // Format learning objectives
+  const learningObjectives = Array.isArray(courseData.learningObjectives)
+    ? courseData.learningObjectives
+    : (typeof courseData.learningObjectives === 'string' && courseData.learningObjectives.trim()
+        ? courseData.learningObjectives.split('\n').filter(obj => obj.trim())
+        : []);
+
+  // Format prerequisites
+  const prerequisites = Array.isArray(courseData.prerequisites)
+    ? courseData.prerequisites
+    : (typeof courseData.prerequisites === 'string' && courseData.prerequisites.trim()
+        ? courseData.prerequisites.split('\n').filter(prereq => prereq.trim())
+        : []);
 
   return (
     <div className="space-y-6">
       <PageBreadcrumb 
         pageTitle="Course Details"
         breadcrumbs={[
-          { label: "Home", href: "/admin/dashboard" },
-          { label: "Courses", href: "/admin/courses" },
-          { label: "Course Details", href: `/admin/courses/details/${id}` }
+          { label: "Home", href: "/" },
+          { label: "Courses", href: "/courses" },
+          { label: "Course Details", href: `/courses/details/${id}` }
         ]}
       />
 
       {/* Header Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          className="flex items-center gap-2"
+          onClick={() => router.push('/courses')}
+        >
           <ArrowLeft className="w-4 h-4" />
           Back to Courses
         </Button>
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2"
+            onClick={() => router.push(`/courses/update/${id}`)}
+          >
             <Edit className="w-4 h-4" />
             Edit Course
           </Button>
-          <Button variant="outline" className="flex items-center gap-2 text-red-600 hover:text-red-700">
-            <Trash2 className="w-4 h-4" />
-            Delete Course
+          <Button 
+            variant="outline" 
+            className="flex items-center gap-2 text-red-600 hover:text-red-700"
+            onClick={handleDelete}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              <>
+                <Trash2 className="w-4 h-4" />
+                Delete Course
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -100,11 +174,20 @@ export default function CourseDetailsPage({ params }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Course Image */}
           <div className="lg:col-span-1">
-            <img 
-              src={courseData.image} 
-              alt={courseData.title}
-              className="w-full h-48 object-cover rounded-lg"
-            />
+            {courseData.image ? (
+              <img 
+                src={courseData.image} 
+                alt={courseData.title}
+                className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                onError={(e) => {
+                  e.target.src = '/images/course-placeholder.jpg';
+                }}
+              />
+            ) : (
+              <div className="w-full h-48 bg-gray-200 rounded-lg border border-gray-300 flex items-center justify-center">
+                <span className="text-gray-400">No Image</span>
+              </div>
+            )}
           </div>
 
           {/* Course Info */}
@@ -115,9 +198,9 @@ export default function CourseDetailsPage({ params }) {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Badge color="default">{courseData.category}</Badge>
-              <Badge color={courseData.status === "Active" ? "success" : "warning"}>
-                {courseData.status}
+              <Badge color="default">{courseData.category?.name || 'N/A'}</Badge>
+              <Badge color={courseData.status === "active" ? "success" : courseData.status === "draft" ? "warning" : "error"}>
+                {courseData.status ? courseData.status.charAt(0).toUpperCase() + courseData.status.slice(1) : 'Draft'}
               </Badge>
               <Badge color={courseData.isOnline ? "info" : "default"}>
                 {courseData.isOnline ? "Online" : "Offline"}
@@ -130,19 +213,24 @@ export default function CourseDetailsPage({ params }) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{courseData.studentsCount} students</span>
+                <span className="text-sm text-gray-600">{courseData.maxStudents || 0} max students</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{courseData.duration}</span>
+                <span className="text-sm text-gray-600">{courseData.duration || 'N/A'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">{courseData.level}</span>
+                <span className="text-sm text-gray-600 capitalize">{courseData.level || 'Beginner'}</span>
               </div>
               <div className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">${courseData.price}</span>
+                <span className="text-sm text-gray-600 font-medium">
+                  ${courseData.price || 0}
+                  {courseData.originalPrice && courseData.originalPrice > courseData.price && (
+                    <span className="ml-1 text-gray-400 line-through">${courseData.originalPrice}</span>
+                  )}
+                </span>
               </div>
             </div>
           </div>
@@ -157,56 +245,105 @@ export default function CourseDetailsPage({ params }) {
           <div className="space-y-3">
             <div>
               <label className="text-sm font-medium text-gray-700">Instructor</label>
-              <p className="text-gray-900">{courseData.instructor}</p>
+              <p className="text-gray-900">{instructorName}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Max Students</label>
-              <p className="text-gray-900">{courseData.maxStudents}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Prerequisites</label>
-              <p className="text-gray-900">{courseData.prerequisites}</p>
+              <p className="text-gray-900">{courseData.maxStudents || 'N/A'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700">Created</label>
-              <p className="text-gray-900">{new Date(courseData.createdAt).toLocaleDateString()}</p>
+              <p className="text-gray-900">
+                {courseData.createdAt ? new Date(courseData.createdAt).toLocaleDateString() : 'N/A'}
+              </p>
             </div>
+            {courseData.createdBy && (
+              <div>
+                <label className="text-sm font-medium text-gray-700">Created By</label>
+                <p className="text-gray-900">
+                  {courseData.createdBy.firstName && courseData.createdBy.lastName
+                    ? `${courseData.createdBy.firstName} ${courseData.createdBy.lastName}`
+                    : 'N/A'}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Learning Objectives */}
+        {/* Learning Objectives & Prerequisites */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Learning Objectives</h3>
-          <ul className="space-y-2">
-            {courseData.learningObjectives.map((objective, index) => (
-              <li key={index} className="flex items-start gap-2">
-                <span className="text-blue-600 mt-1">•</span>
-                <span className="text-gray-900">{objective}</span>
-              </li>
-            ))}
-          </ul>
+          {learningObjectives.length > 0 ? (
+            <ul className="space-y-2 mb-6">
+              {learningObjectives.map((objective, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">•</span>
+                  <span className="text-gray-900">{objective}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-500 mb-6">No learning objectives specified</p>
+          )}
+
+          <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6">Prerequisites</h3>
+          {prerequisites.length > 0 ? (
+            <ul className="space-y-2">
+              {prerequisites.map((prereq, index) => (
+                <li key={index} className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">•</span>
+                  <span className="text-gray-900">{prereq}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-gray-500">No prerequisites specified</p>
+          )}
         </div>
       </div>
 
       {/* Course Structure */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Structure</h3>
-        <div className="space-y-4">
-          {chapters.map((chapter) => (
-            <div key={chapter.id} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-gray-900">Chapter {chapter.order}: {chapter.title}</h4>
-                  <p className="text-sm text-gray-600 mt-1">{chapter.description}</p>
+        {chapters.length > 0 ? (
+          <div className="space-y-4">
+            {chapters.map((chapter) => (
+              <div key={chapter._id || chapter.id} className="border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-gray-900">
+                      {chapter.title || 'Untitled Chapter'}
+                    </h4>
+                    {chapter.description && (
+                      <p className="text-sm text-gray-600 mt-1">{chapter.description}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {chapter.lessons && chapter.lessons.length > 0 && (
+                      <>
+                        <p className="text-sm text-gray-600">{chapter.lessons.length} lesson(s)</p>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">{chapter.duration}</p>
-                  <p className="text-sm text-gray-600">{chapter.lessonsCount} lessons</p>
-                </div>
+                {/* Display lessons if available */}
+                {chapter.lessons && chapter.lessons.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <ul className="space-y-2">
+                      {chapter.lessons.map((lesson, lessonIndex) => (
+                        <li key={lesson._id || lesson.id || lessonIndex} className="text-sm text-gray-600">
+                          • {lesson.title || 'Untitled Lesson'}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-500">No chapters available for this course</p>
+        )}
       </div>
     </div>
   );

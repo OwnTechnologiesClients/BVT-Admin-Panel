@@ -15,18 +15,6 @@ export default function ProgramsPage() {
       icon: GraduationCap,
       component: ProgramsTable
     },
-    {
-      id: "participants",
-      label: "Participants",
-      icon: Users,
-      component: () => <div className="text-center py-8 text-gray-500">Participants management coming soon...</div>
-    },
-    {
-      id: "certifications",
-      label: "Certifications",
-      icon: Award,
-      component: () => <div className="text-center py-8 text-gray-500">Certifications management coming soon...</div>
-    }
   ];
 
   const ActiveComponent = tabs.find(tab => tab.id === activeTab)?.component;

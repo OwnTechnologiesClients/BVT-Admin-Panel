@@ -10,9 +10,9 @@ export default function AddUserPage() {
       <PageBreadcrumb 
         pageTitle="Add New Instructor"
         breadcrumbs={[
-          { label: "Home", href: "/admin/dashboard" },
-          { label: "Instructors", href: "/admin/instructors" },
-          { label: "Add Instructor", href: "/admin/instructors/add" }
+          { label: "Home", href: "/" },
+          { label: "Instructors", href: "/instructors" },
+          { label: "Add Instructor", href: "/instructors/add" }
         ]}
       />
       <div className="bg-white rounded-lg border border-gray-200 p-6">
