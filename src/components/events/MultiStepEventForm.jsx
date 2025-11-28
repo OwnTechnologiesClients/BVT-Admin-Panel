@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button, Switch } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Calendar, MapPin, Users, Clock, Loader2 } from "lucide-react";
 import * as eventAPI from "@/lib/api/event";
-import * as categoryAPI from "@/lib/api/courseCategory";
+import * as eventCategoryAPI from "@/lib/api/eventCategory";
+import * as courseCategoryAPI from "@/lib/api/courseCategory";
 
 const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
-  const [categories, setCategories] = useState([]);
+  const [eventCategories, setEventCategories] = useState([]);
+  const [courseCategories, setCourseCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -21,8 +23,10 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
     category: "",
     maxAttendees: "",
     isOnline: false,
+    mealForAttendees: false,
     eventImage: null,
     tags: [],
+    status: "draft",
     
     // Step 2: Event Details
     startDate: "",
@@ -68,10 +72,16 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch categories
-        const categoriesResponse = await categoryAPI.getAllCategories({ limit: 100 });
-        if (categoriesResponse.success) {
-          setCategories(categoriesResponse.data || []);
+        // Fetch event categories (themes)
+        const eventCategoriesResponse = await eventCategoryAPI.getAllCategories({ limit: 100 });
+        if (eventCategoriesResponse.success) {
+          setEventCategories(eventCategoriesResponse.data || []);
+        }
+
+        // Fetch course categories
+        const courseCategoriesResponse = await courseCategoryAPI.getAllCategories({ limit: 100 });
+        if (courseCategoriesResponse.success) {
+          setCourseCategories(courseCategoriesResponse.data || []);
         }
 
         // If editing, fetch event data
@@ -83,12 +93,14 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
             setFormData({
               title: event.title || "",
               description: event.description || "",
-              eventType: event.eventType || "",
+              eventType: event.eventType?._id || event.eventType || "",
               category: event.category?._id || event.category || "",
               maxAttendees: event.maxAttendees?.toString() || "",
               isOnline: event.isOnline || false,
+              mealForAttendees: event.mealForAttendees || false,
               eventImage: event.eventImage || null,
               tags: event.tags || [],
+              status: event.status || "draft",
               startDate: event.startDate ? new Date(event.startDate).toISOString().split('T')[0] : "",
               endDate: event.endDate ? new Date(event.endDate).toISOString().split('T')[0] : "",
               startTime: event.startTime || "",
@@ -277,6 +289,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           eventData.append('maxAttendees', parseInt(formData.maxAttendees));
         }
         eventData.append('isOnline', formData.isOnline);
+        eventData.append('mealForAttendees', formData.mealForAttendees);
         eventData.append('startDate', formData.startDate);
         eventData.append('endDate', formData.endDate);
         if (formData.startTime) {
@@ -295,6 +308,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           eventData.append('registrationDeadline', formData.registrationDeadline);
         }
         eventData.append('cost', formData.cost ? parseFloat(formData.cost) : 0);
+        eventData.append('status', formData.status || 'draft');
         eventData.append('tags', JSON.stringify(formData.tags || []));
         eventData.append('speakers', JSON.stringify(speakersData));
         eventData.append('agenda', JSON.stringify(agendaData));
@@ -322,6 +336,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           category: formData.category,
           maxAttendees: formData.maxAttendees ? parseInt(formData.maxAttendees) : undefined,
           isOnline: formData.isOnline,
+          mealForAttendees: formData.mealForAttendees,
           eventImage: formData.eventImage && typeof formData.eventImage === 'string' ? formData.eventImage : null,
           startDate: formData.startDate,
           endDate: formData.endDate,
@@ -331,6 +346,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           onlineLink: formData.isOnline ? formData.onlineLink : undefined,
           registrationDeadline: formData.registrationDeadline || undefined,
           cost: formData.cost ? parseFloat(formData.cost) : 0,
+          status: formData.status || 'draft',
           tags: formData.tags || [],
           speakers: speakersData,
           agenda: agendaData
@@ -410,7 +426,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Event Type <span className="text-red-500">*</span>
+            Event Theme <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.eventType}
@@ -418,12 +434,12 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             required
           >
-            <option value="">Select event type</option>
-            <option value="conference">Conference</option>
-            <option value="workshop">Workshop</option>
-            <option value="seminar">Seminar</option>
-            <option value="training">Training Session</option>
-            <option value="meeting">Meeting</option>
+            <option value="">Select event theme</option>
+            {eventCategories.map(category => (
+              <option key={category._id} value={category._id}>
+                {category.name}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -438,7 +454,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
             required
           >
             <option value="">Select category</option>
-            {categories.map(category => (
+            {courseCategories.map(category => (
               <option key={category._id} value={category._id}>
                 {category.name}
               </option>
@@ -467,6 +483,35 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           <label className="text-sm font-medium text-gray-700">
             Online Event
           </label>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          <Switch
+            checked={formData.mealForAttendees}
+            onChange={(checked) => handleInputChange("mealForAttendees", checked)}
+          />
+          <label className="text-sm font-medium text-gray-700">
+            Meal Provided for Attendees
+          </label>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Status <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={formData.status}
+            onChange={(e) => handleInputChange("status", e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            required
+          >
+            <option value="draft">Draft</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="completed">Completed</option>
+          </select>
+          <p className="text-xs text-gray-500 mt-1">
+            Published events will appear in the upcoming events list
+          </p>
         </div>
       </div>
 
@@ -812,13 +857,14 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Time *
+                Time * <span className="text-gray-400 text-xs">(e.g., 09:00 - 10:30 or 09:00 AM - 10:30 AM)</span>
               </label>
               <input
-                type="time"
-                value={item.time}
+                type="text"
+                value={item.time || ""}
                 onChange={(e) => handleAgendaChange(index, "time", e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="e.g., 09:00 - 10:30"
                 required
               />
             </div>

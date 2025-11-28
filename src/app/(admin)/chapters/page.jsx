@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { Plus, Trash2, Edit, Eye, BookOpen, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit, Eye, BookOpen, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import * as chapterAPI from "@/lib/api/chapter";
 import * as courseAPI from "@/lib/api/course";
@@ -13,21 +13,46 @@ import * as lessonAPI from "@/lib/api/lesson";
 export default function ChaptersPage() {
   const router = useRouter();
   const [chapters, setChapters] = useState([]);
+  const [allChapters, setAllChapters] = useState([]); // For accurate stats
   const [courses, setCourses] = useState([]);
   const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCourse, setFilterCourse] = useState("");
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
 
-  // Fetch chapters
-  const fetchChapters = async () => {
+  // Fetch chapters with server-side pagination (Oasis pattern)
+  const fetchChapters = useCallback(async (page, limit, search, courseId) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await chapterAPI.getAllChapters({ limit: 100 });
+      
+      const params = {
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(courseId && { courseId })
+      };
+      
+      const response = await chapterAPI.getAllChapters(params);
       if (response.success) {
         setChapters(response.data || []);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching chapters:', err);
@@ -35,9 +60,9 @@ export default function ChaptersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch courses for filter
+  // Fetch courses for filter - only fetch once
   const fetchCourses = async () => {
     try {
       const response = await courseAPI.getAllCourses({ limit: 100 });
@@ -49,7 +74,19 @@ export default function ChaptersPage() {
     }
   };
 
-  // Fetch lessons to count per chapter
+  // Fetch all chapters for accurate stats - only fetch once
+  const fetchAllChapters = async () => {
+    try {
+      const response = await chapterAPI.getAllChapters({ limit: 10000 });
+      if (response.success) {
+        setAllChapters(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching all chapters:', err);
+    }
+  };
+
+  // Fetch lessons to count per chapter - only fetch once
   const fetchLessons = async () => {
     try {
       const response = await lessonAPI.getAllLessons({ limit: 1000 });
@@ -62,11 +99,46 @@ export default function ChaptersPage() {
     }
   };
 
+  // Initial fetch
   useEffect(() => {
-    fetchChapters();
+    fetchChapters(1, 10, "", "");
+    fetchAllChapters();
     fetchCourses();
     fetchLessons();
-  }, []);
+  }, [fetchChapters]);
+
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchChapters(1, pagination.limit, searchTerm, filterCourse);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm, fetchChapters, pagination.limit, filterCourse]);
+
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchChapters(1, pagination.limit, searchTerm, filterCourse);
+  }, [filterCourse, fetchChapters, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchChapters(newPage, pagination.limit, searchTerm, filterCourse);
+  }, [fetchChapters, pagination.limit, searchTerm, filterCourse]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchChapters(1, newPageSize, searchTerm, filterCourse);
+  }, [fetchChapters, searchTerm, filterCourse]);
 
   const handleDelete = async (chapterId) => {
     if (!confirm("Are you sure you want to delete this chapter?")) {
@@ -76,7 +148,7 @@ export default function ChaptersPage() {
     try {
       const response = await chapterAPI.deleteChapter(chapterId);
       if (response.success) {
-        await fetchChapters();
+        await fetchChapters(pagination.page, pagination.limit, searchTerm, filterCourse);
       }
     } catch (err) {
       alert(err.message || 'Failed to delete chapter');
@@ -100,34 +172,21 @@ export default function ChaptersPage() {
       courseName: course.title || 'N/A',
       duration: 'N/A', // Duration would need to be calculated from lessons
       lessonsCount: lessonsCount,
-      createdAt: chapter.createdAt
+      createdAt: chapter.createdAt,
+      rawChapter: chapter // Keep original for filtering
     };
   };
 
+  // Format chapters for display
   const formattedChapters = chapters.map(formatChapter);
-
-  const filteredChapters = formattedChapters.filter(chapter => {
-    const matchesSearch = chapter.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         chapter.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCourse = filterCourse === "" || chapter.courseId === filterCourse;
-    return matchesSearch && matchesCourse;
-  });
-
-  const courseOptions = [
-    { value: "", label: "All Courses" },
-    ...courses.map(course => ({
-      value: course._id,
-      label: course.title
-    }))
-  ];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-gray-600">Loading chapters...</p>
       </div>
     );
-    }
+  }
 
   return (
     <div className="space-y-6">
@@ -140,11 +199,7 @@ export default function ChaptersPage() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Chapters Management</h2>
-          <p className="text-gray-600">Manage course chapters and their content</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           onClick={() => router.push('/chapters/add')}
           className="flex items-center gap-2"
@@ -164,24 +219,27 @@ export default function ChaptersPage() {
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg border border-gray-200">
         <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search chapters..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div className="lg:w-64">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
             <select
               value={filterCourse}
               onChange={(e) => setFilterCourse(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {courseOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              <option value="">All Courses</option>
+              {courses.map(course => (
+                <option key={course._id} value={course._id}>
+                  {course.title}
                 </option>
               ))}
             </select>
@@ -190,12 +248,12 @@ export default function ChaptersPage() {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Chapters</p>
-              <p className="text-2xl font-bold text-gray-900">{formattedChapters.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{pagination.total || chapters.length}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <BookOpen className="w-4 h-4 text-blue-600" />
@@ -208,37 +266,11 @@ export default function ChaptersPage() {
             <div>
               <p className="text-sm text-gray-600">Active Chapters</p>
               <p className="text-2xl font-bold text-green-600">
-                {formattedChapters.filter(c => c.isActive).length}
+                {allChapters.filter(c => c.isActive).length}
               </p>
             </div>
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
               <span className="text-green-600 font-semibold">✓</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Lessons</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {formattedChapters.reduce((sum, chapter) => sum + chapter.lessonsCount, 0)}
-              </p>
-            </div>
-            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-              <span className="text-purple-600 font-semibold">📚</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Avg. Duration</p>
-              <p className="text-2xl font-bold text-gray-900">N/A</p>
-            </div>
-            <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <span className="text-yellow-600 font-semibold">⏱️</span>
             </div>
           </div>
         </div>
@@ -258,14 +290,14 @@ export default function ChaptersPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredChapters.length === 0 ? (
+              {formattedChapters.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="py-8 text-center text-gray-500">
                     No chapters found
                   </td>
                 </tr>
               ) : (
-                filteredChapters.map((chapter) => (
+                formattedChapters.map((chapter) => (
                 <tr key={chapter.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-4 px-4">
                     <div>
@@ -308,6 +340,87 @@ export default function ChaptersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {pagination.total > 0 && (
+          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                  <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                  <span className="font-medium">{pagination.total}</span> items
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">Show:</label>
+                  <select
+                    value={pagination.limit}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    
+                    if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === pagination.page ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="min-w-[2.5rem]"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

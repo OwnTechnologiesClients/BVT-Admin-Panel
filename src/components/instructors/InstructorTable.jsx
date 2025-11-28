@@ -1,25 +1,25 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, Button } from "@/components/ui";
-import { Eye, Edit, Trash2, Plus, Filter, Search, Users, UserCheck, Award, MapPin, BookOpen, Loader2 } from "lucide-react";
+import { Eye, Edit, Trash2, Plus, Filter, Search, Users, UserCheck, Award, BookOpen } from "lucide-react";
 import * as instructorAPI from "@/lib/api/instructor";
 
 const InstructorTable = () => {
   const router = useRouter();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterDepartment, setFilterDepartment] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterDepartment, setFilterDepartment] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
     total: 0,
-    totalPages: 0,
+    totalPages: 0
   });
   const [stats, setStats] = useState({
     totalInstructors: 0,
@@ -52,29 +52,34 @@ const InstructorTable = () => {
     { value: 'Inactive', label: 'Inactive' },
   ];
 
-  // Fetch instructors
-  const fetchInstructors = async () => {
+  // Fetch instructors with server-side pagination (Oasis pattern)
+  const fetchInstructors = useCallback(async (page, limit, search, department, status) => {
     try {
       setLoading(true);
       setError(null);
 
       const params = {
-        page: pagination.page,
-        limit: pagination.limit,
-        ...(searchTerm && { search: searchTerm }),
-        ...(filterDepartment && { department: filterDepartment }),
-        ...(filterStatus !== '' && { isActive: filterStatus === 'Active' }),
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(department && { department }),
+        ...(status && { isActive: status === 'Active' })
       };
 
       const response = await instructorAPI.getAllInstructors(params);
       
       if (response.success) {
         setInstructors(response.data || []);
-        setPagination(prev => ({
-          ...prev,
-          total: response.pagination?.total || 0,
-          totalPages: response.pagination?.totalPages || 0,
-        }));
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching instructors:', err);
@@ -82,7 +87,7 @@ const InstructorTable = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Fetch stats
   const fetchStats = async () => {
@@ -101,27 +106,70 @@ const InstructorTable = () => {
     }
   };
 
+  // Initial fetch
   useEffect(() => {
-    fetchInstructors();
-  }, [pagination.page, filterDepartment, filterStatus]);
-
-  useEffect(() => {
+    fetchInstructors(1, 10, "", "", "");
     fetchStats();
-  }, []);
+  }, [fetchInstructors]);
 
-  // Debounced search
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (pagination.page === 1) {
-        fetchInstructors();
-      } else {
-        // Reset to page 1 when searching
-        setPagination(prev => ({ ...prev, page: 1 }));
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
       }
-    }, 500);
+    };
+  }, [searchTerm, fetchInstructors, pagination.limit, filterDepartment, filterStatus]);
 
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
+  }, [filterDepartment, filterStatus, fetchInstructors, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchInstructors(newPage, pagination.limit, searchTerm, filterDepartment, filterStatus);
+  }, [fetchInstructors, pagination.limit, searchTerm, filterDepartment, filterStatus]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchInstructors(1, newPageSize, searchTerm, filterDepartment, filterStatus);
+  }, [fetchInstructors, searchTerm, filterDepartment, filterStatus]);
+
+  // Format instructor data from backend
+  const formatInstructor = (instructor) => {
+    const user = instructor.userId || {};
+    const department = departmentMap[instructor.department] || instructor.department || 'N/A';
+    
+    return {
+      id: instructor._id,
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      department: department,
+      departmentKey: instructor.department,
+      isActive: instructor.isActive,
+      experience: instructor.experience ? `${instructor.experience} years` : 'N/A',
+      rating: instructor.rating || 0,
+      specializations: instructor.specializations || '',
+      locations: instructor.locations || [],
+      certifications: instructor.certifications || [],
+      createdAt: instructor.createdAt,
+      rawInstructor: instructor // Keep original for filtering
+    };
+  };
+
+  // Format instructors for display
+  const formattedInstructors = instructors.map(formatInstructor);
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this instructor?')) {
@@ -131,8 +179,8 @@ const InstructorTable = () => {
     try {
       const response = await instructorAPI.deleteInstructor(id);
       if (response.success) {
-        // Refresh the list
-        fetchInstructors();
+        // Refresh current page
+        await fetchInstructors(pagination.page, pagination.limit, searchTerm, filterDepartment, filterStatus);
         fetchStats();
       }
     } catch (err) {
@@ -190,32 +238,10 @@ const InstructorTable = () => {
     return stars;
   };
 
-  // Format instructor data from backend
-  const formatInstructor = (instructor) => {
-    const user = instructor.userId || {};
-    const department = departmentMap[instructor.department] || instructor.department || 'N/A';
-    
-    return {
-      id: instructor._id,
-      firstName: user.firstName || '',
-      lastName: user.lastName || '',
-      email: user.email || '',
-      department: department,
-      departmentKey: instructor.department,
-      isActive: instructor.isActive,
-      experience: instructor.experience ? `${instructor.experience} years` : 'N/A',
-      rating: instructor.rating || 0,
-      specializations: instructor.specializations || '',
-      locations: instructor.locations || [],
-      certifications: instructor.certifications || [],
-      createdAt: instructor.createdAt,
-    };
-  };
-
-  if (loading && instructors.length === 0) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-gray-600">Loading instructors...</p>
       </div>
     );
   }
@@ -263,13 +289,15 @@ const InstructorTable = () => {
           </div>
 
           {/* Department Filter */}
-          <div className="lg:w-48">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
             <select
               value={filterDepartment}
               onChange={(e) => setFilterDepartment(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {departments.map(dept => (
+              <option value="">All Departments</option>
+              {departments.filter(d => d.value).map(dept => (
                 <option key={dept.value} value={dept.value}>
                   {dept.label}
                 </option>
@@ -278,19 +306,16 @@ const InstructorTable = () => {
           </div>
 
           {/* Status Filter */}
-          <div className="lg:w-48">
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {statuses.map(status => (
-                <option key={status.value} value={status.value}>
-                  {status.label}
-                </option>
-              ))}
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
             </select>
-          </div>
+
         </div>
       </div>
 
@@ -300,7 +325,7 @@ const InstructorTable = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Instructors</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalInstructors}</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalInstructors || pagination.total || 0}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <Users className="w-4 h-4 text-blue-600" />
@@ -366,15 +391,14 @@ const InstructorTable = () => {
               </tr>
             </thead>
             <tbody>
-                  {instructors.length === 0 ? (
+                  {formattedInstructors.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="py-8 text-center text-gray-500">
                         No instructors found
                       </td>
                     </tr>
                   ) : (
-                    instructors.map((instructor) => {
-                      const formatted = formatInstructor(instructor);
+                    formattedInstructors.map((formatted) => {
                       return (
                         <tr key={formatted.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-4 px-4">
@@ -448,53 +472,77 @@ const InstructorTable = () => {
         </div>
 
         {/* Pagination */}
-            {pagination.totalPages > 1 && (
+            {pagination.total > 0 && (
         <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Left side: Items info and page size selector */}
+            <div className="flex items-center gap-4">
             <div className="text-sm text-gray-700">
-                    Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                    {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                    {pagination.total} instructors
+                Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{' '}
+                <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{' '}
+                <span className="font-medium">{pagination.total}</span> instructors
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-700">Show:</label>
+                <select
+                  value={pagination.limit}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
             </div>
+
+            {/* Right side: Page navigation */}
             <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={pagination.page === 1}
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                      onClick={() => handlePageChange(pagination.page - 1)}
                     >
                       Previous
                     </Button>
-                    {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
-                      .filter(page => {
-                        // Show first, last, current, and pages around current
+              
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.page <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.page >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.page - 2 + i;
+                  }
+                  
+                  if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                  
                         return (
-                          page === 1 ||
-                          page === pagination.totalPages ||
-                          (page >= pagination.page - 1 && page <= pagination.page + 1)
-                        );
-                      })
-                      .map((page, index, array) => {
-                        // Add ellipsis if needed
-                        const showEllipsisBefore = index > 0 && array[index - 1] !== page - 1;
-                        return (
-                          <React.Fragment key={page}>
-                            {showEllipsisBefore && <span className="px-2">...</span>}
                             <Button
-                              variant={pagination.page === page ? "primary" : "outline"}
+                      key={pageNum}
+                      variant={pageNum === pagination.page ? "primary" : "outline"}
                               size="sm"
-                              onClick={() => setPagination(prev => ({ ...prev, page }))}
+                      onClick={() => handlePageChange(pageNum)}
+                      className="min-w-[2.5rem]"
                             >
-                              {page}
+                      {pageNum}
                             </Button>
-                          </React.Fragment>
                         );
                       })}
+              </div>
+              
                     <Button
                       variant="outline"
                       size="sm"
                       disabled={pagination.page === pagination.totalPages}
-                      onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                      onClick={() => handlePageChange(pagination.page + 1)}
                     >
                       Next
                     </Button>

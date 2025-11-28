@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { Plus, Trash2, Edit, Eye, BookOpen, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit, Eye, BookOpen, Search, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import * as lessonAPI from "@/lib/api/lesson";
 import * as chapterAPI from "@/lib/api/chapter";
@@ -13,21 +13,46 @@ import * as lessonContentAPI from "@/lib/api/lessonContent";
 export default function LessonsPage() {
   const router = useRouter();
   const [lessons, setLessons] = useState([]);
+  const [allLessons, setAllLessons] = useState([]); // For accurate stats
   const [chapters, setChapters] = useState([]);
   const [lessonContents, setLessonContents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterChapter, setFilterChapter] = useState("");
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
 
-  // Fetch lessons
-  const fetchLessons = async () => {
+  // Fetch lessons with server-side pagination (Oasis pattern)
+  const fetchLessons = useCallback(async (page, limit, search, chapterId) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await lessonAPI.getAllLessons({ limit: 100 });
+      
+      const params = {
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(chapterId && { chapterId })
+      };
+      
+      const response = await lessonAPI.getAllLessons(params);
       if (response.success) {
         setLessons(response.data || []);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching lessons:', err);
@@ -35,9 +60,9 @@ export default function LessonsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Fetch chapters for filter
+  // Fetch chapters for filter - only fetch once
   const fetchChapters = async () => {
     try {
       const response = await chapterAPI.getAllChapters({ limit: 100 });
@@ -49,7 +74,19 @@ export default function LessonsPage() {
     }
   };
 
-  // Fetch lesson contents to count per lesson
+  // Fetch all lessons for accurate stats - only fetch once
+  const fetchAllLessons = async () => {
+    try {
+      const response = await lessonAPI.getAllLessons({ limit: 10000 });
+      if (response.success) {
+        setAllLessons(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching all lessons:', err);
+    }
+  };
+
+  // Fetch lesson contents to count per lesson - only fetch once
   const fetchLessonContents = async () => {
     try {
       const response = await lessonContentAPI.getAllLessonContents({ limit: 1000 });
@@ -62,11 +99,46 @@ export default function LessonsPage() {
     }
   };
 
+  // Initial fetch
   useEffect(() => {
-    fetchLessons();
+    fetchLessons(1, 10, "", "");
+    fetchAllLessons();
     fetchChapters();
     fetchLessonContents();
-  }, []);
+  }, [fetchLessons]);
+
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchLessons(1, pagination.limit, searchTerm, filterChapter);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm, fetchLessons, pagination.limit, filterChapter]);
+
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchLessons(1, pagination.limit, searchTerm, filterChapter);
+  }, [filterChapter, fetchLessons, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchLessons(newPage, pagination.limit, searchTerm, filterChapter);
+  }, [fetchLessons, pagination.limit, searchTerm, filterChapter]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchLessons(1, newPageSize, searchTerm, filterChapter);
+  }, [fetchLessons, searchTerm, filterChapter]);
 
   const handleDelete = async (lessonId) => {
     if (!confirm("Are you sure you want to delete this lesson?")) {
@@ -76,7 +148,7 @@ export default function LessonsPage() {
     try {
       const response = await lessonAPI.deleteLesson(lessonId);
       if (response.success) {
-        await fetchLessons();
+        await fetchLessons(pagination.page, pagination.limit, searchTerm, filterChapter);
       }
     } catch (err) {
       alert(err.message || 'Failed to delete lesson');
@@ -104,31 +176,18 @@ export default function LessonsPage() {
       courseName: course.title || 'N/A',
       duration: 'N/A', // Duration would need to be calculated from lesson content
       contentCount: contentCount,
-      createdAt: lesson.createdAt
+      createdAt: lesson.createdAt,
+      rawLesson: lesson // Keep original for filtering
     };
   };
 
+  // Format lessons for display
   const formattedLessons = lessons.map(formatLesson);
-
-  const filteredLessons = formattedLessons.filter(lesson => {
-    const matchesSearch = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         lesson.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesChapter = filterChapter === "" || lesson.chapterId === filterChapter;
-    return matchesSearch && matchesChapter;
-  });
-
-  const chapterOptions = [
-    { value: "", label: "All Chapters" },
-    ...chapters.map(chapter => ({
-      value: chapter._id,
-      label: chapter.title
-    }))
-  ];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <p className="text-gray-600">Loading lessons...</p>
       </div>
     );
   }
@@ -144,11 +203,7 @@ export default function LessonsPage() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Lessons Management</h2>
-          <p className="text-gray-600">Manage individual lessons and their content</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           onClick={() => router.push('/lessons/add')}
           className="flex items-center gap-2"
@@ -168,24 +223,27 @@ export default function LessonsPage() {
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg border border-gray-200">
         <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search lessons..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div className="lg:w-48">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
             <select
               value={filterChapter}
               onChange={(e) => setFilterChapter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {chapterOptions.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
+              <option value="">All Chapters</option>
+              {chapters.map(chapter => (
+                <option key={chapter._id} value={chapter._id}>
+                  {chapter.title}
                 </option>
               ))}
             </select>
@@ -194,12 +252,12 @@ export default function LessonsPage() {
       </div>
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Lessons</p>
-              <p className="text-2xl font-bold text-gray-900">{formattedLessons.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{pagination.total || lessons.length}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <BookOpen className="w-4 h-4 text-blue-600" />
@@ -212,37 +270,11 @@ export default function LessonsPage() {
             <div>
               <p className="text-sm text-gray-600">Free Lessons</p>
               <p className="text-2xl font-bold text-green-600">
-                {formattedLessons.filter(l => l.isFree).length}
+                {allLessons.filter(l => l.isFree).length}
               </p>
             </div>
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
               <span className="text-green-600 font-semibold">🆓</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Content</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {formattedLessons.reduce((sum, lesson) => sum + lesson.contentCount, 0)}
-              </p>
-            </div>
-            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-              <span className="text-purple-600 font-semibold">📁</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Avg. Duration</p>
-              <p className="text-2xl font-bold text-gray-900">N/A</p>
-            </div>
-            <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <span className="text-yellow-600 font-semibold">⏱️</span>
             </div>
           </div>
         </div>
@@ -262,14 +294,14 @@ export default function LessonsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredLessons.length === 0 ? (
+              {formattedLessons.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="py-8 text-center text-gray-500">
                     No lessons found
                   </td>
                 </tr>
               ) : (
-                filteredLessons.map((lesson) => (
+                formattedLessons.map((lesson) => (
                 <tr key={lesson.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-4 px-4">
                     <div>
@@ -319,6 +351,87 @@ export default function LessonsPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {pagination.total > 0 && (
+          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                  <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                  <span className="font-medium">{pagination.total}</span> items
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">Show:</label>
+                  <select
+                    value={pagination.limit}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    
+                    if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === pagination.page ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="min-w-[2.5rem]"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Badge } from "@/components/ui";
-import { Plus, Trash2, Edit, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import * as categoryAPI from "@/lib/api/courseCategory";
 
 const CategoryManager = () => {
@@ -13,15 +13,46 @@ const CategoryManager = () => {
   const [error, setError] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
 
-  // Fetch categories
-  const fetchCategories = async () => {
+  // Fetch categories with pagination
+  const fetchCategories = useCallback(async (page, limit) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await categoryAPI.getAllCategories({ limit: 100 });
+      const response = await categoryAPI.getAllCategories({ 
+        page, 
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc' // Newest first
+      });
       if (response.success) {
         setCategories(response.data || []);
+        if (response.pagination) {
+          const newPagination = {
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          };
+          
+          setPagination(prev => {
+            if (
+              prev.page === newPagination.page &&
+              prev.limit === newPagination.limit &&
+              prev.total === newPagination.total &&
+              prev.totalPages === newPagination.totalPages
+            ) {
+              return prev;
+            }
+            return newPagination;
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching categories:', err);
@@ -29,11 +60,22 @@ const CategoryManager = () => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchCategories(1, 10);
+  }, [fetchCategories]);
+
+  // Handle page change
+  const handlePageChange = (newPage) => {
+    fetchCategories(newPage, pagination.limit);
   };
 
-  useEffect(() => {
-    fetchCategories();
-  }, []);
+  // Handle page size change
+  const handlePageSizeChange = (newPageSize) => {
+    fetchCategories(1, newPageSize);
+  };
 
   const generateSlug = (name) => {
     return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -69,14 +111,14 @@ const CategoryManager = () => {
         // Create new category
         const response = await categoryAPI.createCategory(categoryData);
         if (response.success) {
-          await fetchCategories();
+          await fetchCategories(pagination.page, pagination.limit);
           setEditingCategory(null);
         }
       } else {
         // Update existing category
         const response = await categoryAPI.updateCategory(category._id, categoryData);
         if (response.success) {
-          await fetchCategories();
+          await fetchCategories(pagination.page, pagination.limit);
           setEditingCategory(null);
         }
       }
@@ -95,7 +137,7 @@ const CategoryManager = () => {
     try {
       const response = await categoryAPI.deleteCategory(categoryId);
       if (response.success) {
-        await fetchCategories();
+        await fetchCategories(pagination.page, pagination.limit);
       }
     } catch (err) {
       alert(err.message || 'Failed to delete category');
@@ -115,7 +157,8 @@ const CategoryManager = () => {
     updateCategoryLocal(categoryId, 'slug', generateSlug(name));
   };
 
-  const sortedCategories = [...categories].sort((a, b) => a.name.localeCompare(b.name));
+  // Categories are already sorted by newest first from API
+  const sortedCategories = categories;
 
   if (loading) {
     return (
@@ -282,6 +325,122 @@ const CategoryManager = () => {
       {categories.length === 0 && !loading && (
         <div className="text-center py-12 text-gray-500">
           <p>No categories found. Click "Add Category" to create one.</p>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {pagination.total > 0 && (
+        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 rounded-lg">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Left side: Items info and page size selector */}
+            <div className="flex items-center gap-4">
+              <div className="text-sm text-gray-700">
+                Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                <span className="font-medium">{pagination.total}</span> items
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-700">Show:</label>
+                <select
+                  value={pagination.limit}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Right side: Page navigation */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page === 1}
+                className="flex items-center gap-1"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                Previous
+              </Button>
+              
+              {/* Page numbers */}
+              <div className="flex items-center gap-1">
+                {pagination.page > 3 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(1)}
+                      className="min-w-[2.5rem]"
+                    >
+                      1
+                    </Button>
+                    {pagination.page > 4 && (
+                      <span className="px-2 text-gray-500">...</span>
+                    )}
+                  </>
+                )}
+                
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.page <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.page >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.page - 2 + i;
+                  }
+                  
+                  if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={pageNum === pagination.page ? "primary" : "outline"}
+                      size="sm"
+                      onClick={() => handlePageChange(pageNum)}
+                      className="min-w-[2.5rem]"
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+                
+                {pagination.page < pagination.totalPages - 2 && (
+                  <>
+                    {pagination.page < pagination.totalPages - 3 && (
+                      <span className="px-2 text-gray-500">...</span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(pagination.totalPages)}
+                      className="min-w-[2.5rem]"
+                    >
+                      {pagination.totalPages}
+                    </Button>
+                  </>
+                )}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page === pagination.totalPages}
+                className="flex items-center gap-1"
+              >
+                Next
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

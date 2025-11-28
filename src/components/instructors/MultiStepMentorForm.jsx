@@ -20,6 +20,7 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
     // Step 1: Select User and Basic Information
     userId: "",
     department: "",
+    bio: "",
     isActive: true,
     
     // Step 2: Professional Details
@@ -104,6 +105,7 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
             setFormData({
               userId: instructor.userId?._id || instructor.userId || "",
               department: instructor.department || "",
+              bio: instructor.bio || "",
               isActive: instructor.isActive !== undefined ? instructor.isActive : true,
               experience: instructor.experience?.toString() || "",
               specializations: instructor.specializations || "",
@@ -160,8 +162,21 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
             });
             
             // Set profile picture preview if available
-            if (instructor.userId?.profilePic) {
-              setImagePreview(instructor.userId.profilePic);
+            if (instructor.profilePic) {
+              // Helper to convert image path to full URL if needed
+              const getImageUrl = (imagePath) => {
+                if (!imagePath) return '';
+                if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                  return imagePath;
+                }
+                if (imagePath.startsWith('data:image')) {
+                  return imagePath;
+                }
+                // Convert relative path to full backend URL
+                const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+                return `${backendUrl}${imagePath.startsWith('/') ? imagePath : '/' + imagePath}`;
+              };
+              setImagePreview(getImageUrl(instructor.profilePic));
             }
           }
         } else if (initialData) {
@@ -366,6 +381,9 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
         instructorData = new FormData();
         instructorData.append('department', formData.department);
         instructorData.append('isActive', formData.isActive);
+        if (formData.bio?.trim()) {
+          instructorData.append('bio', formData.bio.trim());
+        }
         if (formData.experience) {
           instructorData.append('experience', parseInt(formData.experience));
         }
@@ -449,6 +467,7 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
         instructorData = {
           department: formData.department,
           isActive: formData.isActive,
+          bio: formData.bio?.trim() || undefined,
           experience: formData.experience ? parseInt(formData.experience) : undefined,
           specializations: formData.specializations?.trim() || undefined,
           achievements: formData.achievements
@@ -518,9 +537,8 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
   };
 
   const renderStep1 = () => {
-    // Get selected user's profile picture
-    const selectedUser = instructorUsers.find(u => u._id === formData.userId);
-    const currentProfilePic = selectedUser?.profilePic || imagePreview || "";
+    // Get image preview (from instructor profilePic or uploaded file)
+    const currentProfilePic = imagePreview || "";
     
     return (
       <div className="space-y-6">
@@ -535,11 +553,8 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
               value={formData.userId}
               onChange={(e) => {
                 handleInputChange("userId", e.target.value);
-                // Update image preview when user is selected
-                const user = instructorUsers.find(u => u._id === e.target.value);
-                if (user?.profilePic && !imageFile) {
-                  setImagePreview(user.profilePic);
-                } else if (!e.target.value) {
+                // Clear image preview when user is changed (unless there's a file)
+                if (!e.target.value && !imageFile) {
                   setImagePreview("");
                 }
               }}
@@ -622,6 +637,22 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
               <option value="naval-operations">Naval Operations</option>
               <option value="submarine-operations">Submarine Operations</option>
             </select>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Bio <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <textarea
+              value={formData.bio}
+              onChange={(e) => handleInputChange("bio", e.target.value)}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Enter instructor biography"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              A brief description about the instructor's background and expertise
+            </p>
           </div>
 
           <div className="flex items-center space-x-3">

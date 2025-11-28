@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button } from "@/components/ui";
-import DataTable from "@/components/common/DataTable";
-import { Eye, Edit, Trash2, Plus, Filter, Search, Users, Loader2 } from "lucide-react";
+import { Eye, Edit, Trash2, Plus, Filter, Search } from "lucide-react";
 import Link from "next/link";
 import * as userAPI from "@/lib/api/user";
 
@@ -14,8 +13,8 @@ const UsersTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterRole, setFilterRole] = useState("");
-  const [filterStatus, setFilterStatus] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -29,29 +28,33 @@ const UsersTable = () => {
     admins: 0
   });
 
-  // Fetch users
-  const fetchUsers = async () => {
+  // Fetch users with server-side pagination (Oasis pattern)
+  const fetchUsers = useCallback(async (page, limit, search, role, status) => {
     try {
       setLoading(true);
       setError(null);
       
       const params = {
-        page: pagination.page,
-        limit: pagination.limit,
-        ...(searchTerm && { search: searchTerm }),
-        ...(filterRole && { role: filterRole }),
-        ...(filterStatus !== '' && { status: filterStatus }),
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(role && { role }),
+        ...(status && { status: status === 'Active' ? 1 : 0 })
       };
 
       const response = await userAPI.getAllUsers(params);
-      
       if (response.success) {
         setUsers(response.data || []);
-        setPagination(prev => ({
-          ...prev,
-          total: response.pagination?.total || 0,
-          totalPages: response.pagination?.totalPages || 0,
-        }));
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -59,7 +62,7 @@ const UsersTable = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Fetch stats
   const fetchStats = async () => {
@@ -78,43 +81,61 @@ const UsersTable = () => {
     }
   };
 
+  // Initial fetch
   useEffect(() => {
-    fetchUsers();
-  }, [pagination.page, filterRole, filterStatus]);
-
-  useEffect(() => {
+    fetchUsers(1, 10, "", "", "");
     fetchStats();
-  }, []);
+  }, [fetchUsers]);
 
-  // Debounced search
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (pagination.page === 1) {
-        fetchUsers();
-      } else {
-        setPagination(prev => ({ ...prev, page: 1 }));
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchUsers(1, pagination.limit, searchTerm, roleFilter, statusFilter);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
       }
-    }, 500);
+    };
+  }, [searchTerm, fetchUsers, pagination.limit, roleFilter, statusFilter]);
 
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchUsers(1, pagination.limit, searchTerm, roleFilter, statusFilter);
+  }, [roleFilter, statusFilter, fetchUsers, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchUsers(newPage, pagination.limit, searchTerm, roleFilter, statusFilter);
+  }, [fetchUsers, pagination.limit, searchTerm, roleFilter, statusFilter]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchUsers(1, newPageSize, searchTerm, roleFilter, statusFilter);
+  }, [fetchUsers, searchTerm, roleFilter, statusFilter]);
 
   // Format user data for display
-  const formatUsers = (users) => {
-    return users.map(user => ({
-      id: user._id,
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
-      username: user.username,
-      email: user.email,
-      phone: user.phone || 'N/A',
-      role: user.role,
-      status: user.status === 1 ? 'Active' : 'Inactive',
-      lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never',
-      createdAt: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'
-    }));
-  };
+  const formatUser = (user) => ({
+    id: user._id,
+    name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+    username: user.username,
+    email: user.email,
+    phone: user.phone || 'N/A',
+    role: user.role,
+    status: user.status === 1 ? 'Active' : 'Inactive',
+    lastLogin: user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never',
+    createdAt: user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A',
+    rawUser: user // Keep original for filtering
+  });
 
-  const formattedUsers = formatUsers(users);
+  // Format users for display
+  const formattedUsers = users.map(formatUser);
 
   const handleDelete = async (userId) => {
     if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
@@ -124,7 +145,7 @@ const UsersTable = () => {
     try {
       const response = await userAPI.deleteUser(userId);
       if (response.success) {
-        fetchUsers();
+        await fetchUsers(pagination.page, pagination.limit, searchTerm, roleFilter, statusFilter);
         fetchStats();
       } else {
         alert(response.message || 'Failed to delete user');
@@ -132,10 +153,6 @@ const UsersTable = () => {
     } catch (err) {
       alert(err.message || 'Failed to delete user');
     }
-  };
-
-  const handlePageChange = (newPage) => {
-    setPagination(prev => ({ ...prev, page: newPage }));
   };
 
   const getRoleColor = (role) => {
@@ -222,135 +239,267 @@ const UsersTable = () => {
     }
   ];
 
-  if (loading && users.length === 0) {
+  const statsForTable = [
+    {
+      label: "Total Users",
+      value: stats.totalUsers,
+      icon: "👥",
+      bgColor: "bg-blue-100",
+      iconColor: "text-blue-600"
+    },
+    {
+      label: "Active Users",
+      value: stats.activeUsers,
+      icon: "✓",
+      bgColor: "bg-green-100",
+      iconColor: "text-green-600"
+    },
+    {
+      label: "Instructors",
+      value: stats.instructors,
+      icon: "👨‍🏫",
+      bgColor: "bg-blue-100",
+      iconColor: "text-blue-600"
+    },
+    {
+      label: "Admins",
+      value: stats.admins,
+      icon: "👤",
+      bgColor: "bg-purple-100",
+      iconColor: "text-purple-600"
+    }
+  ];
+
+  const filtersForTable = [
+    {
+      key: "role",
+      label: "Role",
+      options: ["admin", "instructor"]
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: ["Active", "Inactive"]
+    }
+  ];
+
+  // Get unique roles from current users (for filter dropdown)
+  const uniqueRoles = Array.from(
+    new Set(users.map(u => u.role).filter(Boolean))
+  ).sort();
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-600">Loading users...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Users Management</h1>
-          <p className="text-gray-600 mt-1">Manage users, instructors, and admins</p>
+      {/* Statistics Cards */}
+      {statsForTable.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {statsForTable.map((stat, index) => (
+            <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">{stat.label}</p>
+                  <p className={`text-2xl font-bold ${stat.color || 'text-gray-900'}`}>
+                    {stat.value}
+                  </p>
+                </div>
+                <div className={`w-8 h-8 ${stat.bgColor || 'bg-blue-100'} rounded-lg flex items-center justify-center`}>
+                  <span className={`${stat.iconColor || 'text-blue-600'} font-semibold`}>
+                    {stat.icon}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-        <Link href="/users/add">
-          <Button className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            Add User
-          </Button>
-        </Link>
-      </div>
+      )}
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Users</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalUsers}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-blue-600" />
-            </div>
+      {/* Filters and Search - Matching MyCourses pattern */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Users</h2>
+            <button
+              onClick={() => router.push("/users/add")}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add New User
+            </button>
           </div>
-        </div>
 
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Active Users</p>
-              <p className="text-2xl font-bold text-green-600">{stats.activeUsers}</p>
-            </div>
-            <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Instructors</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.instructors}</p>
-            </div>
-            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Admins</p>
-              <p className="text-2xl font-bold text-purple-600">{stats.admins}</p>
-            </div>
-            <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200">
-        <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search users by name, email, or username..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-          </div>
-          <div className="lg:w-48">
+
+            {/* Role Filter */}
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-400" />
+              <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Roles</option>
+                {uniqueRoles.map(role => (
+                  <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
             <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Roles</option>
-              <option value="admin">Admin</option>
-              <option value="instructor">Instructor</option>
-            </select>
-          </div>
-          <div className="lg:w-48">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Status</option>
-              <option value="1">Active</option>
-              <option value="0">Inactive</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
             </select>
+
           </div>
         </div>
-      </div>
 
-      {/* Table */}
-      {error ? (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600">{error}</p>
+        {/* Data Table */}
+        <div className="p-6">
+          {formattedUsers.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600">No users found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {columns.map((column, index) => (
+                      <th key={index} className="text-left py-3 px-4 font-medium text-gray-700">
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {formattedUsers.map((item, index) => (
+                    <tr key={item.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                      {columns.map((column, colIndex) => (
+                        <td key={colIndex} className="py-4 px-4">
+                          {column.render ? column.render(item[column.key], item) : item[column.key]}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {pagination.total > 0 && (
+            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Left side: Items info and page size selector */}
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                    <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                    <span className="font-medium">{pagination.total}</span> items
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-700">Show:</label>
+                    <select
+                      value={pagination.limit}
+                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                      className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Right side: Page navigation */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(pagination.page - 1)}
+                    disabled={pagination.page === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (pagination.totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (pagination.page <= 3) {
+                        pageNum = i + 1;
+                      } else if (pagination.page >= pagination.totalPages - 2) {
+                        pageNum = pagination.totalPages - 4 + i;
+                      } else {
+                        pageNum = pagination.page - 2 + i;
+                      }
+                      
+                      if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`min-w-[2.5rem] px-3 py-1 border rounded-md text-sm ${
+                            pageNum === pagination.page
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(pagination.page + 1)}
+                    disabled={pagination.page === pagination.totalPages}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <DataTable
-          columns={columns}
-          data={formattedUsers}
-          loading={loading}
-          pagination={pagination}
-          onPageChange={handlePageChange}
-        />
-      )}
+      </div>
     </div>
   );
 };

@@ -2,10 +2,12 @@
 
 import React, { use, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PageBreadcrumb } from "@/components/common";
+import { PageBreadcrumb, ComponentCard } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { ArrowLeft, Edit, Trash2, Mail, Phone, MapPin, Calendar, Award, BookOpen, Loader2 } from "lucide-react";
+import { ArrowLeft, Edit, Trash2, Mail, Phone, MapPin, Calendar, Award, BookOpen, Loader2, Users, FileText } from "lucide-react";
 import * as instructorAPI from "@/lib/api/instructor";
+import * as courseAPI from "@/lib/api/course";
+import Link from "next/link";
 
 export default function InstructorDetailsPage({ params }) {
   const router = useRouter();
@@ -13,6 +15,9 @@ export default function InstructorDetailsPage({ params }) {
   const [instructorData, setInstructorData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [courses, setCourses] = useState([]);
+  const [coursesLoading, setCoursesLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     const fetchInstructor = async () => {
@@ -45,7 +50,7 @@ export default function InstructorDetailsPage({ params }) {
             lastName: instructor.lastName || instructor.userId?.lastName || '',
             email: instructor.email || instructor.userId?.email || '',
             phone: instructor.phone || instructor.userId?.phone || '',
-            profilePic: instructor.profilePic || instructor.userId?.profilePic || instructor.image || '',
+            profilePic: instructor.profilePic || '',
             // Keep userId for reference
             userId: instructor.userId
           };
@@ -64,6 +69,31 @@ export default function InstructorDetailsPage({ params }) {
 
     fetchInstructor();
   }, [id]);
+
+  // Fetch courses when instructor data is loaded
+  useEffect(() => {
+    const fetchCourses = async () => {
+      if (!instructorData?._id && !instructorData?.id) return;
+      
+      try {
+        setCoursesLoading(true);
+        const instructorId = instructorData._id || instructorData.id;
+        const response = await courseAPI.getCoursesByInstructor(instructorId);
+        
+        if (response.success && response.data) {
+          setCourses(response.data || []);
+        }
+      } catch (err) {
+        console.error("Error fetching courses:", err);
+      } finally {
+        setCoursesLoading(false);
+      }
+    };
+
+    if (instructorData) {
+      fetchCourses();
+    }
+  }, [instructorData]);
 
   if (loading) {
     return (
@@ -175,7 +205,7 @@ export default function InstructorDetailsPage({ params }) {
           {/* Profile Picture */}
           <div className="flex-shrink-0">
             <img 
-              src={getImageUrl(instructorData.profilePic || instructorData.image || instructorData.userId?.profilePic)} 
+              src={getImageUrl(instructorData.profilePic)} 
               alt={fullName}
               className="w-24 h-24 rounded-full object-cover border-2 border-gray-200"
               onError={(e) => {
@@ -240,49 +270,75 @@ export default function InstructorDetailsPage({ params }) {
         </div>
       </div>
 
-      {/* Instructor Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Personal Information */}
-        {/* <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Date of Birth</label>
-              <p className="text-gray-900">
-                {instructorData.dob ? new Date(instructorData.dob).toLocaleDateString() : instructorData.userId?.dob ? new Date(instructorData.userId.dob).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Gender</label>
-              <p className="text-gray-900">{instructorData.gender || instructorData.userId?.gender || 'N/A'}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Marital Status</label>
-              <p className="text-gray-900">{instructorData.maritalStatus || instructorData.userId?.maritalStatus || 'N/A'}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Aadhar Number</label>
-              <p className="text-gray-900">{instructorData.aadharNo || instructorData.userId?.aadharNo || 'N/A'}</p>
-            </div>
-          </div>
-        </div> */}
-
-        {/* Contact Information */}
+      {/* Teaching Summary */}
         <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Primary Phone</label>
-              <p className="text-gray-900">{instructorData.phone || instructorData.userId?.phone || 'N/A'}</p>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Teaching Summary</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="text-center">
+            <div className="text-2xl font-bold text-blue-600">{courses.length || 0}</div>
+            <div className="text-sm text-gray-600">Courses Taught</div>
+        </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-green-600">{instructorData.studentsEnrolled || 0}</div>
+            <div className="text-sm text-gray-600">Students Enrolled</div>
             </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-yellow-600">{instructorData.rating || "N/A"}</div>
+            <div className="text-sm text-gray-600">Average Rating</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl font-bold text-purple-600">
+              {(instructorData.certifications && Array.isArray(instructorData.certifications)) 
+                ? instructorData.certifications.length 
+                : 0}
+            </div>
+            <div className="text-sm text-gray-600">Certifications</div>
           </div>
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="bg-white rounded-lg border border-gray-200">
+        <div className="border-b border-gray-200">
+          <div className="flex space-x-1 px-6">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+                activeTab === "overview"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab("courses")}
+              className={`px-4 py-3 font-medium text-sm transition-colors border-b-2 ${
+                activeTab === "courses"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Courses ({courses.length})
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6">
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              {/* Bio Section */}
+              {instructorData.bio && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Biography</h3>
+                  <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{instructorData.bio}</p>
+                </div>
+              )}
+
       {/* Professional Information */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Department & Specializations */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Department & Specializations</h3>
           <div className="space-y-4">
             <div>
@@ -309,7 +365,7 @@ export default function InstructorDetailsPage({ params }) {
         </div>
 
         {/* Achievements & Certifications */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+                <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Achievements & Certifications</h3>
           <div className="space-y-4">
             <div>
@@ -345,31 +401,65 @@ export default function InstructorDetailsPage({ params }) {
           </div>
         </div>
       </div>
-
-      {/* Teaching Summary */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Teaching Summary</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{instructorData.coursesTaught || 0}</div>
-            <div className="text-sm text-gray-600">Courses Taught</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">{instructorData.studentsEnrolled || 0}</div>
-            <div className="text-sm text-gray-600">Students Enrolled</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-600">{instructorData.rating || "N/A"}</div>
-            <div className="text-sm text-gray-600">Average Rating</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">
-              {(instructorData.certifications && Array.isArray(instructorData.certifications)) 
-                ? instructorData.certifications.length 
-                : 0}
             </div>
-            <div className="text-sm text-gray-600">Certifications</div>
+          )}
+
+          {activeTab === "courses" && (
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Courses Taught</h3>
+              {coursesLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                </div>
+              ) : courses.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {courses.map((course) => (
+                    <Link
+                      key={course._id || course.id}
+                      href={`/courses/details/${course._id || course.id}`}
+                      className="block"
+                    >
+                      <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start gap-3">
+                          {course.image ? (
+                            <img
+                              src={course.image}
+                              alt={course.title}
+                              className="w-16 h-16 object-cover rounded-lg"
+                            />
+                          ) : (
+                            <div className="w-16 h-16 bg-gray-200 rounded-lg flex items-center justify-center">
+                              <FileText className="w-8 h-8 text-gray-400" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-gray-900 truncate">{course.title}</h4>
+                            <p className="text-sm text-gray-600 mt-1">
+                              {course.category?.name || 'Uncategorized'}
+                            </p>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                              <span className="flex items-center gap-1">
+                                <Users className="w-3 h-3" />
+                                {course.studentsCount || 0} students
+                              </span>
+                              <Badge color={course.status === 'active' ? 'success' : 'default'}>
+                                {course.status || 'draft'}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
           </div>
+                    </Link>
+                  ))}
+          </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                  <p>No courses found for this instructor.</p>
+          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

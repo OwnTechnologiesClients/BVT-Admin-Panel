@@ -1,32 +1,53 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { Plus, Trash2, Edit, Eye, Video, FileText, Upload, Loader2 } from "lucide-react";
+import { Plus, Trash2, Edit, Eye, Video, FileText, Upload, Search, Filter, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import * as lessonContentAPI from "@/lib/api/lessonContent";
-import * as lessonAPI from "@/lib/api/lesson";
 
 export default function LessonContentPage() {
   const router = useRouter();
   const [contents, setContents] = useState([]);
-  const [lessons, setLessons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterLesson, setFilterLesson] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
   const [deletingId, setDeletingId] = useState(null);
 
-  // Fetch lesson contents
-  const fetchLessonContents = async () => {
+  // Fetch lesson contents with server-side pagination (Oasis pattern)
+  const fetchLessonContents = useCallback(async (page, limit, search, contentType) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await lessonContentAPI.getAllLessonContents({ limit: 100 });
+      
+      const params = {
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(contentType && { contentType })
+      };
+      
+      const response = await lessonContentAPI.getAllLessonContents(params);
       if (response.success) {
         setContents(response.data || []);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
       } else {
         setError(response.message || 'Failed to fetch lesson contents');
       }
@@ -36,24 +57,45 @@ export default function LessonContentPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Fetch lessons for filter
-  const fetchLessons = async () => {
-    try {
-      const response = await lessonAPI.getAllLessons({ limit: 100 });
-      if (response.success) {
-        setLessons(response.data || []);
-      }
-    } catch (err) {
-      console.error('Error fetching lessons:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchLessonContents();
-    fetchLessons();
   }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchLessonContents(1, 10, "", "");
+  }, [fetchLessonContents]);
+
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchLessonContents(1, pagination.limit, searchTerm, filterType);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm, fetchLessonContents, pagination.limit, filterType]);
+
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchLessonContents(1, pagination.limit, searchTerm, filterType);
+  }, [filterType, fetchLessonContents, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchLessonContents(newPage, pagination.limit, searchTerm, filterType);
+  }, [fetchLessonContents, pagination.limit, searchTerm, filterType]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchLessonContents(1, newPageSize, searchTerm, filterType);
+  }, [fetchLessonContents, searchTerm, filterType]);
 
   // Determine content type from video/document presence
   const getContentType = (content) => {
@@ -66,20 +108,11 @@ export default function LessonContentPage() {
     return "none";
   };
 
-  // Filter contents
-  const filteredContents = contents.filter(content => {
-    const matchesSearch = 
-      (content.title?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
-      (content.description?.toLowerCase().includes(searchTerm.toLowerCase()) || false);
-    
-    const lessonName = content.lessonId?.title || content.lessonId || "";
-    const matchesLesson = filterLesson === "" || lessonName === filterLesson;
-    
-    const contentType = getContentType(content);
-    const matchesType = filterType === "" || contentType === filterType;
-    
-    return matchesSearch && matchesLesson && matchesType;
-  });
+  // Format contents for display (with content type)
+  const formattedContents = contents.map(content => ({
+    ...content,
+    contentType: getContentType(content)
+  }));
 
   const handleDelete = async (contentId) => {
     if (!confirm("Are you sure you want to delete this lesson content?")) {
@@ -90,7 +123,8 @@ export default function LessonContentPage() {
       setDeletingId(contentId);
       const response = await lessonContentAPI.deleteLessonContent(contentId);
       if (response.success) {
-        await fetchLessonContents();
+        // Refresh current page
+        await fetchLessonContents(pagination.page, pagination.limit, searchTerm, filterType);
       } else {
         alert(response.message || 'Failed to delete lesson content');
       }
@@ -127,16 +161,6 @@ export default function LessonContentPage() {
     }
   };
 
-  // Get unique lesson names for filter
-  const uniqueLessons = Array.from(
-    new Set(
-      contents
-        .map(c => c.lessonId?.title || c.lessonId || "")
-        .filter(Boolean)
-    )
-  ).sort();
-
-  const contentTypes = ["All", "video", "document", "mixed"];
 
   if (loading) {
     return (
@@ -149,7 +173,7 @@ export default function LessonContentPage() {
           ]}
         />
         <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+          <p className="text-gray-600">Loading lesson content...</p>
         </div>
       </div>
     );
@@ -167,7 +191,7 @@ export default function LessonContentPage() {
         />
         <div className="bg-white rounded-lg border border-red-200 p-6">
           <p className="text-red-600">{error}</p>
-          <Button variant="outline" onClick={fetchLessonContents} className="mt-4">
+          <Button variant="outline" onClick={() => fetchLessonContents(1, 10, "", "", "")} className="mt-4">
             Retry
           </Button>
         </div>
@@ -186,11 +210,7 @@ export default function LessonContentPage() {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Lesson Content Management</h2>
-          <p className="text-gray-600">Manage videos, documents, and other lesson content</p>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           onClick={() => router.push('/lesson-content/add')}
           className="flex items-center gap-2"
@@ -203,42 +223,28 @@ export default function LessonContentPage() {
       {/* Filters */}
       <div className="bg-white p-4 rounded-lg border border-gray-200">
         <div className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
               placeholder="Search content..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <div className="lg:w-48">
-            <select
-              value={filterLesson}
-              onChange={(e) => setFilterLesson(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Lessons</option>
-              {uniqueLessons.map(lesson => (
-                <option key={lesson} value={lesson}>
-                  {lesson}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="lg:w-48">
+          <div className="flex items-center gap-2">
+            <Filter className="w-5 h-5 text-gray-400" />
             <select
               value={filterType}
               onChange={(e) => setFilterType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              {contentTypes.map(type => (
-                <option key={type} value={type === "All" ? "" : type}>
-                  {type}
-                </option>
-              ))}
+            <option value="">All Types</option>
+            <option value="video">Video</option>
+            <option value="document">Document</option>
+            <option value="mixed">Mixed</option>
             </select>
-          </div>
         </div>
       </div>
 
@@ -248,7 +254,7 @@ export default function LessonContentPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Content</p>
-              <p className="text-2xl font-bold text-gray-900">{contents.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{pagination.total || contents.length}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <Upload className="w-4 h-4 text-blue-600" />
@@ -261,8 +267,8 @@ export default function LessonContentPage() {
             <div>
               <p className="text-sm text-gray-600">Videos</p>
               <p className="text-2xl font-bold text-blue-600">
-                {contents.filter(c => {
-                  const type = getContentType(c);
+                {formattedContents.filter(c => {
+                  const type = c.contentType;
                   return type === "video" || type === "mixed";
                 }).length}
               </p>
@@ -278,8 +284,8 @@ export default function LessonContentPage() {
             <div>
               <p className="text-sm text-gray-600">Documents</p>
               <p className="text-2xl font-bold text-green-600">
-                {contents.filter(c => {
-                  const type = getContentType(c);
+                {formattedContents.filter(c => {
+                  const type = c.contentType;
                   return type === "document" || type === "mixed";
                 }).length}
               </p>
@@ -295,7 +301,7 @@ export default function LessonContentPage() {
             <div>
               <p className="text-sm text-gray-600">Required</p>
               <p className="text-2xl font-bold text-purple-600">
-                {contents.filter(c => c.isRequired).length}
+                {formattedContents.filter(c => c.isRequired).length}
               </p>
             </div>
             <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -307,9 +313,9 @@ export default function LessonContentPage() {
 
       {/* Content Table */}
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {filteredContents.length === 0 ? (
+        {formattedContents.length === 0 ? (
           <div className="p-8 text-center text-gray-500">
-            {contents.length === 0 ? "No lesson content found. Add your first content!" : "No content matches your filters."}
+            No lesson content found
           </div>
         ) : (
         <div className="overflow-x-auto">
@@ -325,8 +331,8 @@ export default function LessonContentPage() {
               </tr>
             </thead>
             <tbody>
-                {filteredContents.map((content) => {
-                  const contentType = getContentType(content);
+                {formattedContents.map((content) => {
+                  const contentType = content.contentType;
                   const lessonName = content.lessonId?.title || content.lessonId || "N/A";
                   const courseName = content.courseId?.title || content.courseId || "N/A";
                   const chapterName = content.chapterId?.title || content.chapterId || "N/A";
@@ -420,6 +426,87 @@ export default function LessonContentPage() {
             </tbody>
           </table>
         </div>
+        )}
+
+        {/* Pagination */}
+        {pagination.total > 0 && (
+          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                  <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                  <span className="font-medium">{pagination.total}</span> items
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">Show:</label>
+                  <select
+                    value={pagination.limit}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    
+                    if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === pagination.page ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="min-w-[2.5rem]"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

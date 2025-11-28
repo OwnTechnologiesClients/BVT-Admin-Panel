@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import DataTable from "@/components/common/DataTable";
 import { Badge } from "@/components/ui";
+import { Search, Filter, Eye, Edit, Trash2, Plus } from "lucide-react";
 import { getAllStudents, deleteStudent } from "@/lib/api/student";
 
 const StudentsTable = () => {
@@ -11,45 +11,123 @@ const StudentsTable = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [rankFilter, setRankFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
 
-  // Fetch students from API
-  useEffect(() => {
-    const fetchStudents = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const response = await getAllStudents();
-        
-        if (response.success) {
-          setStudents(response.data?.students || []);
-        } else {
-          setError(response.message || "Failed to fetch students");
+  // Fetch students with server-side pagination (Oasis pattern)
+  const fetchStudents = useCallback(async (page, limit, search, rank, branch) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const params = {
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(rank && { rank }),
+        ...(branch && { branch })
+      };
+      
+      const response = await getAllStudents(params);
+      
+      if (response.success) {
+        setStudents(response.data?.students || response.data || []);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
         }
-      } catch (err) {
-        setError(err.message || "An error occurred while fetching students");
-        console.error("Error fetching students:", err);
-      } finally {
-        setLoading(false);
+      } else {
+        setError(response.message || "Failed to fetch students");
       }
-    };
-
-    fetchStudents();
+    } catch (err) {
+      setError(err.message || "An error occurred while fetching students");
+      console.error("Error fetching students:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Filter options based on API data
+  // Initial fetch
+  useEffect(() => {
+    fetchStudents(1, 10, "", "", "");
+  }, [fetchStudents]);
+
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchStudents(1, pagination.limit, searchTerm, rankFilter, branchFilter);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm, fetchStudents, pagination.limit, rankFilter, branchFilter]);
+
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchStudents(1, pagination.limit, searchTerm, rankFilter, branchFilter);
+  }, [rankFilter, branchFilter, fetchStudents, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchStudents(newPage, pagination.limit, searchTerm, rankFilter, branchFilter);
+  }, [fetchStudents, pagination.limit, searchTerm, rankFilter, branchFilter]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchStudents(1, newPageSize, searchTerm, rankFilter, branchFilter);
+  }, [fetchStudents, searchTerm, rankFilter, branchFilter]);
+
+  // Format student data
+  const formatStudent = (student) => ({
+    _id: student._id,
+    fullName: student.fullName || student.name || 'N/A',
+    email: student.email || 'N/A',
+    phone: student.phone || 'N/A',
+    rank: student.rank || 'N/A',
+    branch: student.branch || 'N/A',
+    address: student.address || {},
+    createdAt: student.createdAt,
+    lastLogin: student.lastLogin,
+    rawStudent: student // Keep original for filtering
+  });
+
+  // Format students for display
+  const formattedStudents = students.map(formatStudent);
+
+  // Get unique filter options from current students
   const filterOptions = useMemo(() => {
-    const branches = Array.from(new Set(students.map((s) => s.branch).filter(Boolean)));
-    const ranks = Array.from(new Set(students.map((s) => s.rank).filter(Boolean)));
+    const branches = Array.from(new Set(students.map((s) => s.branch).filter(Boolean))).sort();
+    const ranks = Array.from(new Set(students.map((s) => s.rank).filter(Boolean))).sort();
     return { branches, ranks };
   }, [students]);
 
-  // Calculate stats from API data
+  // Calculate stats from current students
   const stats = useMemo(() => {
-    // Note: Course enrollment stats will be calculated once enrollment system is implemented
     return [
       {
         label: "Total Students",
-        value: students.length,
+        value: pagination.total || students.length,
         icon: "🎓",
         bgColor: "bg-blue-100",
         iconColor: "text-blue-600",
@@ -76,7 +154,7 @@ const StudentsTable = () => {
         iconColor: "text-yellow-600",
       },
     ];
-  }, [students]);
+  }, [students, pagination.total]);
 
   const columns = [
     {
@@ -139,18 +217,6 @@ const StudentsTable = () => {
     },
   ];
 
-  const filters = [
-    {
-      key: "branch",
-      label: "Branch / Division",
-      options: filterOptions.branches,
-    },
-    {
-      key: "rank",
-      label: "Rank",
-      options: filterOptions.ranks,
-    },
-  ];
 
   const handleAdd = () => {
     router.push("/students/add");
@@ -172,8 +238,8 @@ const StudentsTable = () => {
     try {
       const response = await deleteStudent(student._id);
       if (response.success) {
-        // Refresh the list
-        setStudents((prev) => prev.filter((s) => s._id !== student._id));
+        // Refresh all students
+        await fetchStudents(pagination.page, pagination.limit, searchTerm, rankFilter, branchFilter);
       } else {
         alert(response.message || "Failed to delete student");
       }
@@ -186,45 +252,247 @@ const StudentsTable = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
-          <p className="mt-4 text-sm text-gray-600">Loading students...</p>
-        </div>
+        <p className="text-gray-600">Loading students...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-lg bg-red-50 border border-red-200 p-4">
-        <p className="text-sm text-red-800">{error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-2 text-sm text-red-600 underline hover:text-red-800"
-        >
-          Retry
-        </button>
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
       </div>
     );
   }
 
-  // Note: DataTable handles its own search/filter state internally
-  // We send API requests on mount and when filters change
-  // Client-side filtering in DataTable is a fallback for small datasets
   return (
-    <DataTable
-      title="Students"
-      description="Manage student records, enrollment, and training progress."
-      data={students}
-      columns={columns}
-      filters={filters}
-      stats={stats}
-      searchPlaceholder="Search students by name, email, rank, or branch..."
-      onAdd={handleAdd}
-      onView={handleView}
-      onEdit={handleEdit}
-      onDelete={handleDelete}
-    />
+    <div className="space-y-6">
+      {/* Statistics Cards */}
+      {stats.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {stats.map((stat, index) => (
+            <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-600">{stat.label}</p>
+                  <p className={`text-2xl font-bold ${stat.color || 'text-gray-900'}`}>
+                    {stat.value}
+                  </p>
+                </div>
+                <div className={`w-8 h-8 ${stat.bgColor || 'bg-blue-100'} rounded-lg flex items-center justify-center`}>
+                  <span className={`${stat.iconColor || 'text-blue-600'} font-semibold`}>
+                    {stat.icon}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Filters and Search - Matching MyCourses pattern */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold text-gray-900">Students</h2>
+            <button
+              onClick={handleAdd}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add New Student
+            </button>
+          </div>
+
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-4">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Search students by name, email, rank, or branch..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {/* Rank Filter */}
+            {filterOptions.ranks.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Filter className="w-5 h-5 text-gray-400" />
+                <select
+                  value={rankFilter}
+                  onChange={(e) => setRankFilter(e.target.value)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Ranks</option>
+                  {filterOptions.ranks.map(rank => (
+                    <option key={rank} value={rank}>{rank}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Branch Filter */}
+            {filterOptions.branches.length > 0 && (
+              <select
+                value={branchFilter}
+                onChange={(e) => setBranchFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Branches</option>
+                {filterOptions.branches.map(branch => (
+                  <option key={branch} value={branch}>{branch}</option>
+                ))}
+              </select>
+            )}
+
+          </div>
+        </div>
+
+        {/* Data Table */}
+        <div className="p-6">
+          {formattedStudents.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-gray-600">No students found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    {columns.map((column, index) => (
+                      <th key={index} className="text-left py-3 px-4 font-medium text-gray-700">
+                        {column.label}
+                      </th>
+                    ))}
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formattedStudents.map((item, index) => (
+                    <tr key={item._id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                      {columns.map((column, colIndex) => (
+                        <td key={colIndex} className="py-4 px-4">
+                          {column.render ? column.render(item[column.key], item) : item[column.key]}
+                        </td>
+                      ))}
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleView(item)}
+                            className="p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleEdit(item)}
+                            className="p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded"
+                            title="Edit"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item)}
+                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {pagination.total > 0 && (
+            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Left side: Items info and page size selector */}
+                <div className="flex items-center gap-4">
+                  <div className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                    <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                    <span className="font-medium">{pagination.total}</span> items
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-700">Show:</label>
+                    <select
+                      value={pagination.limit}
+                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                      className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Right side: Page navigation */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePageChange(pagination.page - 1)}
+                    disabled={pagination.page === 1}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                  
+                  {/* Page numbers */}
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (pagination.totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (pagination.page <= 3) {
+                        pageNum = i + 1;
+                      } else if (pagination.page >= pagination.totalPages - 2) {
+                        pageNum = pagination.totalPages - 4 + i;
+                      } else {
+                        pageNum = pagination.page - 2 + i;
+                      }
+                      
+                      if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          className={`min-w-[2.5rem] px-3 py-1 border rounded-md text-sm ${
+                            pageNum === pagination.page
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(pagination.page + 1)}
+                    disabled={pagination.page === pagination.totalPages}
+                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 

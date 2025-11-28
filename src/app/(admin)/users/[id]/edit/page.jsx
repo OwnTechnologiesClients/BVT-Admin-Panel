@@ -21,8 +21,6 @@ export default function EditUserPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [errors, setErrors] = useState({});
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -40,10 +38,6 @@ export default function EditUserPage() {
             status: user.status !== undefined ? user.status : 1
           });
           
-          // Set profile picture preview if available
-          if (user.profilePic) {
-            setImagePreview(user.profilePic);
-          }
         } else {
           setError('User not found');
         }
@@ -75,23 +69,6 @@ export default function EditUserPage() {
     }
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const removeImage = () => {
-    setImageFile(null);
-    // Keep the existing image preview from the user's profilePic
-    // Don't clear imagePreview here, as we want to show the current profile pic
-  };
 
   const validateForm = () => {
     const newErrors = {};
@@ -128,25 +105,8 @@ export default function EditUserPage() {
     try {
       setSubmitting(true);
       
-      // Create FormData if image is uploaded, otherwise use plain object
-      const hasImageUpload = imageFile !== null;
-      let userData;
-      
-      if (hasImageUpload) {
-        // Use FormData for file upload (like OMS pattern)
-        userData = new FormData();
-        userData.append('firstName', formData.firstName.trim());
-        userData.append('lastName', formData.lastName.trim());
-        userData.append('email', formData.email.trim());
-        if (formData.phone?.trim()) {
-          userData.append('phone', formData.phone.trim());
-        }
-        userData.append('role', formData.role);
-        userData.append('status', formData.status);
-        userData.append('profilePic', imageFile);
-      } else {
-        // Use plain object if no image upload
-        userData = {
+      // Use plain object for user data
+      const userData = {
           firstName: formData.firstName.trim(),
           lastName: formData.lastName.trim(),
           email: formData.email.trim(),
@@ -252,45 +212,6 @@ export default function EditUserPage() {
             value={formData.phone} 
             onChange={e => handleInputChange("phone", e.target.value)}
           />
-        </label>
-        
-        {/* Profile Picture Upload */}
-        <label className="block text-sm font-medium">
-          Profile Picture <span className="text-gray-400 text-xs">(optional)</span>
-          <div className="space-y-4 mt-2">
-            {imagePreview && (
-              <div className="relative inline-block">
-                <img
-                  src={imagePreview}
-                  alt="Profile preview"
-                  className="w-32 h-32 rounded-full object-cover border-2 border-gray-300"
-                  onError={(e) => {
-                    e.target.src = '/images/user-placeholder.jpg';
-                  }}
-                />
-                {imageFile && (
-                  <button
-                    type="button"
-                    onClick={removeImage}
-                    className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            )}
-            <div>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="w-full border rounded px-3 py-2 mt-1"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Upload a profile picture (JPG, PNG, GIF). Max size: 5MB
-              </p>
-            </div>
-          </div>
         </label>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

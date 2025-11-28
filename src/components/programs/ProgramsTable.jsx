@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button } from "@/components/ui";
-import { Eye, Edit, Trash2, Plus, Filter, Search, GraduationCap, Users, Award, Loader2 } from "lucide-react";
+import { Eye, Edit, Trash2, Plus, Filter, Search, GraduationCap, Users, Award, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import * as programAPI from "@/lib/api/program";
 
@@ -14,15 +14,39 @@ const ProgramsTable = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
 
-  // Fetch programs
-  const fetchPrograms = async () => {
+  // Fetch programs with server-side pagination (Oasis pattern)
+  const fetchPrograms = useCallback(async (page, limit, search, category) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await programAPI.getAllPrograms({ limit: 100 });
+      
+      const params = {
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(category && { category })
+      };
+
+      const response = await programAPI.getAllPrograms(params);
       if (response.success) {
         setPrograms(response.data || []);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching programs:', err);
@@ -30,11 +54,45 @@ const ProgramsTable = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchPrograms();
   }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchPrograms(1, 10, "", "");
+  }, [fetchPrograms]);
+
+  // Debounced search (300ms like Oasis)
+  const searchTimeoutRef = useRef(null);
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      fetchPrograms(1, pagination.limit, searchTerm, filterCategory);
+    }, 300);
+    
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchTerm, fetchPrograms, pagination.limit, filterCategory]);
+
+  // Handle filter changes - trigger API call
+  useEffect(() => {
+    fetchPrograms(1, pagination.limit, searchTerm, filterCategory);
+  }, [filterCategory, fetchPrograms, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchPrograms(newPage, pagination.limit, searchTerm, filterCategory);
+  }, [fetchPrograms, pagination.limit, searchTerm, filterCategory]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchPrograms(1, newPageSize, searchTerm, filterCategory);
+  }, [fetchPrograms, searchTerm, filterCategory]);
 
   // Format program data
   const formatProgram = (program) => {
@@ -82,14 +140,8 @@ const ProgramsTable = () => {
     };
   };
 
+  // Format programs for display
   const formattedPrograms = programs.map(formatProgram);
-
-  const filteredPrograms = formattedPrograms.filter(program => {
-    const matchesSearch = program.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         program.director.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = filterCategory === "" || program.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -143,7 +195,8 @@ const ProgramsTable = () => {
     try {
       const response = await programAPI.deleteProgram(programId);
       if (response.success) {
-        await fetchPrograms();
+        // Refresh current page
+        await fetchPrograms(pagination.page, pagination.limit, searchTerm, filterCategory);
       }
     } catch (err) {
       alert(err.message || 'Failed to delete program');
@@ -169,11 +222,7 @@ const ProgramsTable = () => {
   return (
     <div className="space-y-6">
       {/* Header with Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Programs Management</h2>
-          <p className="text-gray-600">Manage and monitor all training programs</p>
-        </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-4">
         <Button 
           variant="primary" 
           className="flex items-center gap-2"
@@ -216,6 +265,7 @@ const ProgramsTable = () => {
               ))}
             </select>
           </div>
+
         </div>
       </div>
 
@@ -225,7 +275,7 @@ const ProgramsTable = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Programs</p>
-              <p className="text-2xl font-bold text-gray-900">{formattedPrograms.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{pagination.total || 0}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
               <GraduationCap className="w-4 h-4 text-blue-600" />
@@ -294,14 +344,14 @@ const ProgramsTable = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPrograms.length === 0 ? (
+              {formattedPrograms.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="py-8 text-center text-gray-500">
                     No programs found
                   </td>
                 </tr>
               ) : (
-                filteredPrograms.map((program) => (
+                formattedPrograms.map((program) => (
                   <tr key={program.id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-4 px-4">
                       <div>
@@ -373,6 +423,90 @@ const ProgramsTable = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {pagination.total > 0 && (
+          <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              {/* Left side: Items info and page size selector */}
+              <div className="flex items-center gap-4">
+                <div className="text-sm text-gray-700">
+                  Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
+                  <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
+                  <span className="font-medium">{pagination.total}</span> items
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-700">Show:</label>
+                  <select
+                    value={pagination.limit}
+                    onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                    className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Right side: Page navigation */}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page - 1)}
+                  disabled={pagination.page === 1}
+                  className="flex items-center gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Previous
+                </Button>
+                
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (pagination.totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.totalPages - 2) {
+                      pageNum = pagination.totalPages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    
+                    if (pageNum < 1 || pageNum > pagination.totalPages) return null;
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={pageNum === pagination.page ? "primary" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                        className="min-w-[2.5rem]"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handlePageChange(pagination.page + 1)}
+                  disabled={pagination.page === pagination.totalPages}
+                  className="flex items-center gap-1"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

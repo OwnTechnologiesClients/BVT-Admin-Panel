@@ -684,6 +684,20 @@ export default function EditLessonContentPage({ params }) {
                             filePath: URL.createObjectURL(file) // For preview
                           }
                         }));
+                        
+                        // Auto-calculate video duration
+                        const video = document.createElement('video');
+                        video.preload = 'metadata';
+                        video.onloadedmetadata = () => {
+                          window.URL.revokeObjectURL(video.src);
+                          const duration = Math.round(video.duration);
+                          handleVideoChange("duration", duration);
+                        };
+                        video.onerror = () => {
+                          console.error('Error loading video metadata');
+                          // If auto-calculation fails, keep the field editable
+                        };
+                        video.src = URL.createObjectURL(file);
                       }
                     }}
                     className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300"
@@ -696,16 +710,22 @@ export default function EditLessonContentPage({ params }) {
                 )}
                 <div className="mt-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Duration (seconds)
+                    Duration (seconds) <span className="text-gray-400 text-xs">(auto-calculated)</span>
                   </label>
                   <input
                     type="number"
                     min="0"
-                    value={formData.video.duration}
+                    value={formData.video.duration || ''}
                     onChange={(e) => handleVideoChange("duration", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter video duration"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                    placeholder="Will be calculated from video"
+                    readOnly={!!formData.video.file}
                   />
+                  {formData.video.file && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Duration is automatically calculated from the video file. To change it, remove and re-upload the video.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

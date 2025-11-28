@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
 import { Plus, Trash2, Edit, BookOpen, Eye, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import * as categoryAPI from "@/lib/api/courseCategory";
+import * as categoryAPI from "@/lib/api/eventCategory";
 
-export default function CourseCategoriesPage() {
+export default function EventCategoriesPage() {
   const router = useRouter();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +21,9 @@ export default function CourseCategoriesPage() {
   });
   const [stats, setStats] = useState({
     totalCategories: 0,
-    activeCategories: 0
+    activeCategories: 0,
+    inactiveCategories: 0,
+    totalEvents: 0
   });
 
   // Fetch categories with pagination
@@ -61,7 +63,9 @@ export default function CourseCategoriesPage() {
         const active = (response.data || []).filter(c => c.isActive).length;
         setStats({
           totalCategories: response.pagination?.total || response.data?.length || 0,
-          activeCategories: active
+          activeCategories: active,
+          inactiveCategories: (response.data?.length || 0) - active,
+          totalEvents: 0 // This would need to come from events API
         });
       }
     } catch (err) {
@@ -88,7 +92,7 @@ export default function CourseCategoriesPage() {
   };
 
   const handleDelete = async (categoryId) => {
-    if (!confirm("Are you sure you want to delete this category?")) {
+    if (!confirm("Are you sure you want to delete this theme?")) {
       return;
     }
 
@@ -98,7 +102,7 @@ export default function CourseCategoriesPage() {
         await fetchCategories(pagination.page, pagination.limit);
       }
     } catch (err) {
-      alert(err.message || 'Failed to delete category');
+      alert(err.message || 'Failed to delete theme');
     }
   };
 
@@ -116,21 +120,21 @@ export default function CourseCategoriesPage() {
   return (
     <div className="space-y-6">
       <PageBreadcrumb 
-        pageTitle="Course Categories"
+        pageTitle="Event Themes"
         breadcrumbs={[
           { label: "Home", href: "/" },
-          { label: "Course Categories", href: "/course-categories" }
+          { label: "Event Themes", href: "/event-categories" }
         ]}
       />
 
       <div className="flex items-center justify-end">
         <Button
-          onClick={() => router.push('/course-categories/add')}
+          onClick={() => router.push('/event-categories/add')}
           className="flex items-center gap-2"
           variant="primary"
         >
           <Plus className="w-4 h-4" />
-          Add Category
+          Add Theme
         </Button>
       </div>
 
@@ -141,11 +145,11 @@ export default function CourseCategoriesPage() {
       )}
 
       {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Categories</p>
+              <p className="text-sm text-gray-600">Total Themes</p>
               <p className="text-2xl font-bold text-gray-900">{stats.totalCategories}</p>
             </div>
             <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -157,11 +161,35 @@ export default function CourseCategoriesPage() {
         <div className="bg-white p-4 rounded-lg border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Active Categories</p>
+              <p className="text-sm text-gray-600">Active Themes</p>
               <p className="text-2xl font-bold text-green-600">{stats.activeCategories}</p>
             </div>
             <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
               <span className="text-green-600 font-semibold">✓</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Total Events</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalEvents}</p>
+            </div>
+            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+              <span className="text-purple-600 font-semibold">📅</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Inactive Themes</p>
+              <p className="text-2xl font-bold text-red-600">{stats.inactiveCategories}</p>
+            </div>
+            <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+              <span className="text-red-600 font-semibold">✗</span>
             </div>
           </div>
         </div>
@@ -173,7 +201,7 @@ export default function CourseCategoriesPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-700">Theme</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Slug</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
@@ -183,7 +211,7 @@ export default function CourseCategoriesPage() {
               {sortedCategories.length === 0 ? (
                 <tr>
                   <td colSpan="4" className="py-8 text-center text-gray-500">
-                    No categories found
+                    No themes found
                   </td>
                 </tr>
               ) : (
@@ -207,12 +235,12 @@ export default function CourseCategoriesPage() {
                   </td>
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2">
-                          <Link href={`/course-categories/${categoryId}/view`}>
+                          <Link href={`/event-categories/${categoryId}/view`}>
                             <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
                               <Eye className="w-4 h-4" />
                             </Button>
                           </Link>
-                          <Link href={`/course-categories/${categoryId}/edit`}>
+                          <Link href={`/event-categories/${categoryId}/edit`}>
                       <Button variant="outline" size="sm" className="text-gray-700 hover:text-gray-900">
                         <Edit className="w-4 h-4" />
                       </Button>
@@ -319,3 +347,4 @@ export default function CourseCategoriesPage() {
     </div>
   );
 }
+

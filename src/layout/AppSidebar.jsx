@@ -52,20 +52,26 @@ const adminNavItems = [
   },
   {
     icon: <CalendarDaysIcon />,
-    name: "Events",
+    name: "Event Management",
     subItems: [
-      { name: "View Events", path: "/events" },
-      { name: "Add Event", path: "/events/add" },
+      { name: "Events", path: "/event-categories", subItems: [
+        { name: "View Event", path: "/events" },
+        { name: "Add Event", path: "/events/add" }
+      ]},
+      { name: "Event Themes", path: "/event-categories", subItems: [
+        { name: "View Themes", path: "/event-categories" },
+        { name: "Add Theme", path: "/event-categories/add" }
+      ]},
     ],
   },
-  {
-    icon: <GraduationCapIcon />,
-    name: "Programs",
-    subItems: [
-      { name: "View Programs", path: "/programs" },
-      { name: "Add Program", path: "/programs/add" },
-    ],
-  },
+  // {
+  //   icon: <GraduationCapIcon />,
+  //   name: "Programs",
+  //   subItems: [
+  //     { name: "View Programs", path: "/programs" },
+  //     { name: "Add Program", path: "/programs/add" },
+  //   ],
+  // },
   {
     icon: <ClipboardListIcon />,
     name: "Tests",

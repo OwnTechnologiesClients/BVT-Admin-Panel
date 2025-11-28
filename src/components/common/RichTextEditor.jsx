@@ -48,11 +48,41 @@ const RichTextEditor = ({
                 if (!attributes.width) {
                   return {};
                 }
+                // Ensure width is rendered as a string with 'px' if it's a number
+                const widthValue = typeof attributes.width === 'number' 
+                  ? `${attributes.width}px` 
+                  : (typeof attributes.width === 'string' && !attributes.width.includes('px'))
+                    ? `${attributes.width}px`
+                    : attributes.width;
                 return {
-                  width: attributes.width,
+                  width: widthValue,
+                  style: `width: ${widthValue}; max-width: 100%; height: auto;`,
                 };
               },
-              parseHTML: element => element.getAttribute('width'),
+              parseHTML: element => {
+                // Try to get width from style attribute first, then from width attribute
+                const styleAttr = element.getAttribute('style');
+                if (styleAttr) {
+                  // Match width in style: "width: 300px;" or "width:300px;"
+                  const widthMatch = styleAttr.match(/width\s*:\s*(\d+(?:\.\d+)?)\s*px/i);
+                  if (widthMatch && widthMatch[1]) {
+                    const numValue = parseInt(widthMatch[1]);
+                    if (!isNaN(numValue) && numValue > 0) {
+                      return numValue;
+                    }
+                  }
+                }
+                // Fallback to width attribute
+                const widthAttr = element.getAttribute('width');
+                if (widthAttr) {
+                  // Remove 'px' if present and return as number
+                  const numValue = parseInt(widthAttr.replace('px', '').trim());
+                  if (!isNaN(numValue) && numValue > 0) {
+                    return numValue;
+                  }
+                }
+                return null;
+              },
             },
             height: {
               default: null,
@@ -74,9 +104,17 @@ const RichTextEditor = ({
                 }
                 return {
                   'data-align': attributes.align,
+                  style: `float: ${attributes.align === 'left' ? 'left' : attributes.align === 'right' ? 'right' : 'none'}; ${attributes.align === 'center' ? 'display: block; margin-left: auto; margin-right: auto;' : ''}`,
                 };
               },
-              parseHTML: element => element.getAttribute('data-align') || 'center',
+              parseHTML: element => {
+                const dataAlign = element.getAttribute('data-align');
+                if (dataAlign) return dataAlign;
+                const style = element.getAttribute('style') || '';
+                if (style.includes('float: left') || style.includes('float:left')) return 'left';
+                if (style.includes('float: right') || style.includes('float:right')) return 'right';
+                return 'center';
+              },
             },
           };
         },
@@ -286,6 +324,21 @@ const RichTextEditor = ({
             };
             
             const stopResize = () => {
+              if (isResizing) {
+                // Ensure final width is saved when resize ends
+                const finalWidth = parseInt(img.style.width) || img.offsetWidth;
+                if (finalWidth > 0 && typeof getPos === 'function') {
+                  const pos = getPos();
+                  if (pos !== undefined) {
+                    const currentAlign = node.attrs.align || 'center';
+                    editor.commands.updateAttributes('image', {
+                      width: finalWidth,
+                      height: null,
+                      align: currentAlign,
+                    });
+                  }
+                }
+              }
               isResizing = false;
               document.removeEventListener('mousemove', doResize);
               document.removeEventListener('mouseup', stopResize);
