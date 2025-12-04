@@ -7,8 +7,6 @@ import { apiRequest } from '../api';
  * @param {number} params.page - Page number (default: 1)
  * @param {number} params.limit - Items per page (default: 10)
  * @param {string} params.search - Search term
- * @param {string} params.rank - Filter by rank
- * @param {string} params.branch - Filter by branch
  */
 export const getAllStudents = async (params = {}) => {
   const queryParams = new URLSearchParams();
@@ -16,8 +14,6 @@ export const getAllStudents = async (params = {}) => {
   if (params.page) queryParams.append('page', params.page);
   if (params.limit) queryParams.append('limit', params.limit);
   if (params.search) queryParams.append('search', params.search);
-  if (params.rank) queryParams.append('rank', params.rank);
-  if (params.branch) queryParams.append('branch', params.branch);
 
   const queryString = queryParams.toString();
   const endpoint = `/students/list${queryString ? `?${queryString}` : ''}`;

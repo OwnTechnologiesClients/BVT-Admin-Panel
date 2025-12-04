@@ -26,6 +26,8 @@ export default function LessonsPage() {
     total: 0,
     totalPages: 0
   });
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
 
   // Fetch lessons with server-side pagination (Oasis pattern)
   const fetchLessons = useCallback(async (page, limit, search, chapterId) => {
@@ -99,17 +101,30 @@ export default function LessonsPage() {
     }
   };
 
-  // Initial fetch
+  // Initial fetch - only run once even in Strict Mode
   useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
     fetchLessons(1, 10, "", "");
     fetchAllLessons();
     fetchChapters();
     fetchLessonContents();
-  }, [fetchLessons]);
+    // Mark initial mount as complete after a short delay to allow other effects to skip
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search (300ms like Oasis)
   const searchTimeoutRef = useRef(null);
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -127,6 +142,10 @@ export default function LessonsPage() {
 
   // Handle filter changes - trigger API call
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
     fetchLessons(1, pagination.limit, searchTerm, filterChapter);
   }, [filterChapter, fetchLessons, pagination.limit, searchTerm]);
 

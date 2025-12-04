@@ -26,6 +26,8 @@ const CoursesTable = () => {
     activeCourses: 0,
     avgPrice: 0
   });
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
 
   // Fetch courses with server-side pagination (Oasis pattern)
   const fetchCourses = useCallback(async (page, limit, search, status, category, type) => {
@@ -93,15 +95,28 @@ const CoursesTable = () => {
     }
   };
 
-  // Initial fetch
+  // Initial fetch - only run once even in Strict Mode
   useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
     fetchCourses(1, 10, "", "", "", "");
     fetchStats();
-  }, [fetchCourses]);
+    // Mark initial mount as complete after a short delay to allow other effects to skip
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search (300ms like Oasis)
   const searchTimeoutRef = useRef(null);
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -119,6 +134,10 @@ const CoursesTable = () => {
 
   // Handle filter changes - trigger API call
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
     fetchCourses(1, pagination.limit, searchTerm, statusFilter, categoryFilter, typeFilter);
   }, [statusFilter, categoryFilter, typeFilter, fetchCourses, pagination.limit, searchTerm]);
 

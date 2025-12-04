@@ -21,6 +21,8 @@ export default function LessonContentPage() {
     totalPages: 0
   });
   const [deletingId, setDeletingId] = useState(null);
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
 
   // Fetch lesson contents with server-side pagination (Oasis pattern)
   const fetchLessonContents = useCallback(async (page, limit, search, contentType) => {
@@ -59,14 +61,27 @@ export default function LessonContentPage() {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch - only run once even in Strict Mode
   useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
     fetchLessonContents(1, 10, "", "");
-  }, [fetchLessonContents]);
+    // Mark initial mount as complete after a short delay to allow other effects to skip
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search (300ms like Oasis)
   const searchTimeoutRef = useRef(null);
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -84,6 +99,10 @@ export default function LessonContentPage() {
 
   // Handle filter changes - trigger API call
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
     fetchLessonContents(1, pagination.limit, searchTerm, filterType);
   }, [filterType, fetchLessonContents, pagination.limit, searchTerm]);
 
@@ -191,7 +210,7 @@ export default function LessonContentPage() {
         />
         <div className="bg-white rounded-lg border border-red-200 p-6">
           <p className="text-red-600">{error}</p>
-          <Button variant="outline" onClick={() => fetchLessonContents(1, 10, "", "", "")} className="mt-4">
+          <Button variant="outline" onClick={() => fetchLessonContents(1, 10, "", "")} className="mt-4">
             Retry
           </Button>
         </div>
@@ -245,6 +264,7 @@ export default function LessonContentPage() {
             <option value="document">Document</option>
             <option value="mixed">Mixed</option>
             </select>
+          </div>
         </div>
       </div>
 

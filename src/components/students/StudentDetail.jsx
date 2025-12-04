@@ -237,16 +237,11 @@ const StudentDetail = ({ student }) => {
               <p className="text-lg font-semibold text-gray-900">
                 {student.fullName}
               </p>
-              <p className="text-sm text-gray-500">{student.rank}</p>
-              <p className="text-xs text-gray-400">{student.branch}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-3">
             <Badge color="info">
               Enrolled Courses: <span className="ml-1">{courses.length}</span>
-            </Badge>
-            <Badge color="success">
-              Focus Area: <span className="ml-1">{student.branch}</span>
             </Badge>
           </div>
         </div>
@@ -283,8 +278,6 @@ const StudentDetail = ({ student }) => {
             <InfoRow label="Age" value={student.age} />
             <InfoRow label="Gender" value={student.gender} />
             <InfoRow label="Date of Birth" value={student.dob} />
-            <InfoRow label="Rank" value={student.rank} />
-            <InfoRow label="Branch" value={student.branch} />
           </div>
 
           {(student.address || student.emergencyContact) && (

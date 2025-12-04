@@ -12,17 +12,17 @@ const StudentsTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [rankFilter, setRankFilter] = useState("");
-  const [branchFilter, setBranchFilter] = useState("");
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
     total: 0,
     totalPages: 0
   });
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
 
   // Fetch students with server-side pagination (Oasis pattern)
-  const fetchStudents = useCallback(async (page, limit, search, rank, branch) => {
+  const fetchStudents = useCallback(async (page, limit, search) => {
     try {
       setLoading(true);
       setError(null);
@@ -32,9 +32,7 @@ const StudentsTable = () => {
         limit,
         sort_column: 'createdAt',
         sort_direction: 'desc',
-        ...(search && { search }),
-        ...(rank && { rank }),
-        ...(branch && { branch })
+        ...(search && { search })
       };
       
       const response = await getAllStudents(params);
@@ -60,20 +58,33 @@ const StudentsTable = () => {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch - only run once even in Strict Mode
   useEffect(() => {
-    fetchStudents(1, 10, "", "", "");
-  }, [fetchStudents]);
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
+    fetchStudents(1, 10, "");
+    // Mark initial mount as complete after a short delay to allow other effects to skip
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search (300ms like Oasis)
   const searchTimeoutRef = useRef(null);
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
     
     searchTimeoutRef.current = setTimeout(() => {
-      fetchStudents(1, pagination.limit, searchTerm, rankFilter, branchFilter);
+      fetchStudents(1, pagination.limit, searchTerm);
     }, 300);
     
     return () => {
@@ -81,22 +92,26 @@ const StudentsTable = () => {
         clearTimeout(searchTimeoutRef.current);
       }
     };
-  }, [searchTerm, fetchStudents, pagination.limit, rankFilter, branchFilter]);
+  }, [searchTerm, fetchStudents, pagination.limit]);
 
   // Handle filter changes - trigger API call
   useEffect(() => {
-    fetchStudents(1, pagination.limit, searchTerm, rankFilter, branchFilter);
-  }, [rankFilter, branchFilter, fetchStudents, pagination.limit, searchTerm]);
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+    fetchStudents(1, pagination.limit, searchTerm);
+  }, [fetchStudents, pagination.limit, searchTerm]);
 
   // Handle page change
   const handlePageChange = useCallback((newPage) => {
-    fetchStudents(newPage, pagination.limit, searchTerm, rankFilter, branchFilter);
-  }, [fetchStudents, pagination.limit, searchTerm, rankFilter, branchFilter]);
+    fetchStudents(newPage, pagination.limit, searchTerm);
+  }, [fetchStudents, pagination.limit, searchTerm]);
 
   // Handle page size change
   const handlePageSizeChange = useCallback((newPageSize) => {
-    fetchStudents(1, newPageSize, searchTerm, rankFilter, branchFilter);
-  }, [fetchStudents, searchTerm, rankFilter, branchFilter]);
+    fetchStudents(1, newPageSize, searchTerm);
+  }, [fetchStudents, searchTerm]);
 
   // Format student data
   const formatStudent = (student) => ({
@@ -104,8 +119,6 @@ const StudentsTable = () => {
     fullName: student.fullName || student.name || 'N/A',
     email: student.email || 'N/A',
     phone: student.phone || 'N/A',
-    rank: student.rank || 'N/A',
-    branch: student.branch || 'N/A',
     address: student.address || {},
     createdAt: student.createdAt,
     lastLogin: student.lastLogin,
@@ -117,9 +130,7 @@ const StudentsTable = () => {
 
   // Get unique filter options from current students
   const filterOptions = useMemo(() => {
-    const branches = Array.from(new Set(students.map((s) => s.branch).filter(Boolean))).sort();
-    const ranks = Array.from(new Set(students.map((s) => s.rank).filter(Boolean))).sort();
-    return { branches, ranks };
+    return {};
   }, [students]);
 
   // Calculate stats from current students
@@ -131,20 +142,6 @@ const StudentsTable = () => {
         icon: "🎓",
         bgColor: "bg-blue-100",
         iconColor: "text-blue-600",
-      },
-      {
-        label: "With Rank",
-        value: students.filter((s) => s.rank).length,
-        icon: "⭐",
-        bgColor: "bg-green-100",
-        iconColor: "text-green-600",
-      },
-      {
-        label: "With Branch",
-        value: students.filter((s) => s.branch).length,
-        icon: "🏢",
-        bgColor: "bg-purple-100",
-        iconColor: "text-purple-600",
       },
       {
         label: "With Phone",
@@ -164,16 +161,6 @@ const StudentsTable = () => {
         <div>
           <p className="font-semibold text-gray-900">{value}</p>
           <p className="text-xs text-gray-500">{item.email}</p>
-        </div>
-      ),
-    },
-    {
-      key: "rank",
-      label: "Rank / Branch",
-      render: (_value, item) => (
-        <div className="text-sm text-gray-700">
-          <p>{item.rank}</p>
-          <p className="text-xs text-gray-500">{item.branch}</p>
         </div>
       ),
     },
@@ -239,7 +226,7 @@ const StudentsTable = () => {
       const response = await deleteStudent(student._id);
       if (response.success) {
         // Refresh all students
-        await fetchStudents(pagination.page, pagination.limit, searchTerm, rankFilter, branchFilter);
+        await fetchStudents(pagination.page, pagination.limit, searchTerm);
       } else {
         alert(response.message || "Failed to delete student");
       }
@@ -311,43 +298,12 @@ const StudentsTable = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
                 type="text"
-                placeholder="Search students by name, email, rank, or branch..."
+                placeholder="Search students by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-
-            {/* Rank Filter */}
-            {filterOptions.ranks.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Filter className="w-5 h-5 text-gray-400" />
-                <select
-                  value={rankFilter}
-                  onChange={(e) => setRankFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Ranks</option>
-                  {filterOptions.ranks.map(rank => (
-                    <option key={rank} value={rank}>{rank}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Branch Filter */}
-            {filterOptions.branches.length > 0 && (
-              <select
-                value={branchFilter}
-                onChange={(e) => setBranchFilter(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Branches</option>
-                {filterOptions.branches.map(branch => (
-                  <option key={branch} value={branch}>{branch}</option>
-                ))}
-              </select>
-            )}
 
           </div>
         </div>

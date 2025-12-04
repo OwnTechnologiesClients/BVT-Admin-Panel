@@ -75,7 +75,8 @@ export default function CourseCategoriesPage() {
   // Initial fetch
   useEffect(() => {
     fetchCategories(1, 10);
-  }, [fetchCategories]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle page change
   const handlePageChange = (newPage) => {

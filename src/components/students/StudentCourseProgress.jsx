@@ -69,7 +69,6 @@ const StudentCourseProgress = ({ student, course, enrollment, structure, progres
           </div>
           <div className="flex flex-wrap gap-2">
             <Badge color="info">{student.fullName}</Badge>
-            <Badge>{student.rank}</Badge>
             <Badge color={course.status === "Completed" ? "success" : "warning"}>
               {course.status}
             </Badge>

@@ -55,7 +55,6 @@ const StudentHighlight = ({ student }) => (
     <div className="flex items-start justify-between">
       <div>
         <p className="text-sm font-semibold text-gray-900">{student.name}</p>
-        <p className="text-xs text-gray-500">{student.rank}</p>
       </div>
       <Badge color={student.status === "On Track" ? "success" : "warning"}>
         {student.status}

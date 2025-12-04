@@ -1,13 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { PageBreadcrumb } from "@/components/common";
 import DataTable from "@/components/common/DataTable";
 import StudentQueryModal from "@/components/common/StudentQueryModal";
-import {
-  instructorQueries as initialQueries,
-} from "@/data/instructorMockData";
 import { Badge } from "@/components/ui";
+import * as queryAPI from "@/lib/api/studentQuery";
 
 const priorityColors = {
   Critical: "error",
@@ -24,14 +22,77 @@ const statusColors = {
 };
 
 const InstructorNotificationsPage = () => {
-  const [queries, setQueries] = useState(initialQueries);
-  const [selectedQueryId, setSelectedQueryId] = useState(
-    initialQueries[0]?.id ?? null
-  );
+  const [queries, setQueries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedQueryId, setSelectedQueryId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+
+  // Fetch queries from API (instructor sees only their assigned queries)
+  const fetchQueries = useCallback(async (page = 1, limit = 10, status = null) => {
+    try {
+      setLoading(true);
+      const params = { page, limit };
+      if (status && status !== "") params.status = status.toLowerCase();
+      
+      const response = await queryAPI.getAllQueries(params);
+      if (response.success && response.data) {
+        const backendQueries = response.data.queries || [];
+        // Map backend data to frontend format
+        const mappedQueries = backendQueries.map((query) => ({
+          id: query._id,
+          _id: query._id,
+          studentName: query.studentId?.fullName || "Unknown Student",
+          studentEmail: query.studentId?.email || "",
+          course: query.courseId?.title || "Unknown Course",
+          courseId: query.courseId?._id || query.courseId,
+          assignedInstructor: query.assignedTo?.userId
+            ? `${query.assignedTo.userId.firstName || ""} ${query.assignedTo.userId.lastName || ""}`.trim() || "Unassigned"
+            : "Unassigned",
+          subject: query.subject,
+          priority: "Medium", // Backend doesn't have priority, defaulting to Medium
+          status: query.status ? query.status.charAt(0).toUpperCase() + query.status.slice(1) : "Open",
+          lastUpdated: query.lastUpdated || query.updatedAt || query.createdAt,
+          submittedAt: query.createdAt,
+          messages: (query.messages || []).map((msg) => ({
+            id: msg._id || `msg-${Date.now()}-${Math.random()}`,
+            authorRole: msg.sender === "student" ? "student" : "admin",
+            authorName: msg.senderName || "Unknown",
+            timestamp: msg.timestamp || new Date().toISOString(),
+            content: msg.content,
+            attachments: msg.attachments || []
+          }))
+        }));
+        
+        setQueries(mappedQueries);
+        
+        if (response.data.pagination) {
+          setPagination({
+            page: response.data.pagination.page || page,
+            limit: response.data.pagination.limit || limit,
+            total: response.data.pagination.total || 0,
+            totalPages: response.data.pagination.pages || 0
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching queries:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchQueries();
+  }, [fetchQueries]);
 
   const selectedQuery = useMemo(
-    () => queries.find((query) => query.id === selectedQueryId) ?? null,
+    () => queries.find((query) => query.id === selectedQueryId || query._id === selectedQueryId) ?? null,
     [queries, selectedQueryId]
   );
 
@@ -68,9 +129,12 @@ const InstructorNotificationsPage = () => {
     {
       key: "status",
       label: "Status",
-      render: (value) => (
-        <Badge color={statusColors[value] || "default"}>{value}</Badge>
-      ),
+      render: (value) => {
+        const capitalizedStatus = value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : "Open";
+        return (
+          <Badge color={statusColors[capitalizedStatus] || "default"}>{capitalizedStatus}</Badge>
+        );
+      },
     },
     {
       key: "lastUpdated",
@@ -89,74 +153,97 @@ const InstructorNotificationsPage = () => {
     {
       key: "status",
       label: "Status",
-      options: ["Open", "In Progress", "Waiting on Student", "Resolved"],
-    },
-    {
-      key: "priority",
-      label: "Priority",
-      options: ["Critical", "High", "Medium", "Low"],
+      options: ["open", "resolved", "closed"],
     },
   ];
 
-  const stats = [
-    {
-      label: "Active Queries",
-      value: queries.length,
-      icon: "💬",
-      bgColor: "bg-blue-100",
-      iconColor: "text-blue-600",
-    },
-    {
-      label: "High Priority",
-      value: queries.filter((q) => q.priority === "High").length,
-      icon: "⚠️",
-      bgColor: "bg-yellow-100",
-      iconColor: "text-yellow-600",
-    },
-    {
-      label: "Open",
-      value: queries.filter((q) => q.status === "Open").length,
-      icon: "📬",
-      bgColor: "bg-green-100",
-      iconColor: "text-green-600",
-    },
-    {
-      label: "Waiting on You",
-      value: queries.filter((q) => q.status === "In Progress").length,
-      icon: "⏳",
-      bgColor: "bg-purple-100",
-      iconColor: "text-purple-600",
-    },
-  ];
+  const stats = useMemo(() => {
+    const total = pagination.total || queries.length;
+    const open = queries.filter((q) => q.status === "Open" || q.status === "open").length;
+    const resolved = queries.filter((q) => q.status === "Resolved" || q.status === "resolved").length;
+    const closed = queries.filter((q) => q.status === "Closed" || q.status === "closed").length;
+
+    return [
+      {
+        label: "Active Queries",
+        value: total,
+        icon: "💬",
+        bgColor: "bg-blue-100",
+        iconColor: "text-blue-600",
+      },
+      {
+        label: "Open",
+        value: open,
+        icon: "📬",
+        bgColor: "bg-green-100",
+        iconColor: "text-green-600",
+      },
+      {
+        label: "Resolved",
+        value: resolved,
+        icon: "✅",
+        bgColor: "bg-blue-100",
+        iconColor: "text-blue-600",
+      },
+      {
+        label: "Closed",
+        value: closed,
+        icon: "🔒",
+        bgColor: "bg-gray-100",
+        iconColor: "text-gray-600",
+      },
+    ];
+  }, [queries, pagination]);
 
   const handleView = (query) => {
-    setSelectedQueryId(query.id);
+    setSelectedQueryId(query.id || query._id);
     setIsModalOpen(true);
   };
 
-  const handleSendReply = (messageContent) => {
+  const handleSendReply = async (messageContent) => {
     if (!selectedQuery || !messageContent) return;
-    const newMessage = {
-      id: `msg-${Date.now()}`,
-      authorRole: "admin",
-      authorName: selectedQuery.assignedInstructor || "Instructor",
-      timestamp: new Date().toISOString(),
-      content: messageContent,
-    };
-
-    setQueries((prev) =>
-      prev.map((query) =>
-        query.id === selectedQuery.id
-          ? {
-              ...query,
-              status: "In Progress",
-              lastUpdated: newMessage.timestamp,
-              messages: [...query.messages, newMessage],
-            }
-          : query
-      )
-    );
-    setIsModalOpen(false);
+    
+    try {
+      // The modal handles the API call, we just need to refresh the query
+      const response = await queryAPI.getQueryById(selectedQuery._id || selectedQuery.id);
+      if (response.success && response.data) {
+        const updatedQuery = response.data.query;
+        const mappedQuery = {
+          id: updatedQuery._id,
+          _id: updatedQuery._id,
+          studentName: updatedQuery.studentId?.fullName || "Unknown Student",
+          studentEmail: updatedQuery.studentId?.email || "",
+          course: updatedQuery.courseId?.title || "Unknown Course",
+          courseId: updatedQuery.courseId?._id || updatedQuery.courseId,
+          assignedInstructor: updatedQuery.assignedTo?.userId
+            ? `${updatedQuery.assignedTo.userId.firstName || ""} ${updatedQuery.assignedTo.userId.lastName || ""}`.trim() || "Unassigned"
+            : "Unassigned",
+          subject: updatedQuery.subject,
+          priority: "Medium",
+          status: updatedQuery.status ? updatedQuery.status.charAt(0).toUpperCase() + updatedQuery.status.slice(1) : "Open",
+          lastUpdated: updatedQuery.lastUpdated || updatedQuery.updatedAt || updatedQuery.createdAt,
+          submittedAt: updatedQuery.createdAt,
+          messages: (updatedQuery.messages || []).map((msg) => ({
+            id: msg._id || `msg-${Date.now()}-${Math.random()}`,
+            authorRole: msg.sender === "student" ? "student" : "admin",
+            authorName: msg.senderName || "Unknown",
+            timestamp: msg.timestamp || new Date().toISOString(),
+            content: msg.content,
+            attachments: msg.attachments || []
+          }))
+        };
+        
+        setQueries((prev) =>
+          prev.map((query) =>
+            (query.id === mappedQuery.id || query._id === mappedQuery._id)
+              ? mappedQuery
+              : query
+          )
+        );
+      }
+    } catch (error) {
+      console.error("Error refreshing query:", error);
+    }
   };
 
   return (
@@ -177,6 +264,14 @@ const InstructorNotificationsPage = () => {
         stats={stats}
         searchPlaceholder="Search queries by student, subject, or course..."
         onView={handleView}
+        pagination={pagination}
+        onPageChange={(page) => fetchQueries(page, pagination.limit)}
+        onPageSizeChange={(limit) => fetchQueries(1, limit)}
+        onFilterChange={(filters) => {
+          const status = filters.status || null;
+          fetchQueries(1, pagination.limit, status);
+        }}
+        serverSide={true}
       />
 
       <StudentQueryModal

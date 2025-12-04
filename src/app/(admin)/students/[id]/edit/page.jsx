@@ -34,8 +34,6 @@ const EditStudentPage = () => {
             phone: studentData.phone || "",
             age: studentData.age?.toString() || "",
             gender: studentData.gender || "",
-            rank: studentData.rank || "",
-            branch: studentData.branch || "",
             dob: studentData.dob ? new Date(studentData.dob).toISOString().split('T')[0] : "",
             street: studentData.address?.street || "",
             city: studentData.address?.city || "",

@@ -15,8 +15,6 @@ const initialFormState = {
   phone: "",
   age: "",
   gender: "",
-  rank: "",
-  branch: "",
   dob: "",
   street: "",
   city: "",
@@ -144,8 +142,6 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
         phone: formData.phone.trim() || undefined,
         age: formData.age ? parseInt(formData.age) : undefined,
         gender: formData.gender || undefined,
-        rank: formData.rank.trim() || undefined,
-        branch: formData.branch.trim() || undefined,
         dob: formData.dob || undefined,
         address: {
           street: formData.street.trim() || undefined,
@@ -182,8 +178,6 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
         if (studentData.phone) finalStudentData.append('phone', studentData.phone);
         if (studentData.age) finalStudentData.append('age', studentData.age);
         if (studentData.gender) finalStudentData.append('gender', studentData.gender);
-        if (studentData.rank) finalStudentData.append('rank', studentData.rank);
-        if (studentData.branch) finalStudentData.append('branch', studentData.branch);
         if (studentData.dob) finalStudentData.append('dob', studentData.dob);
         
         if (studentData.address?.street) finalStudentData.append('address[street]', studentData.address.street);
@@ -465,30 +459,6 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
                 disabled={isSubmitting}
               />
             </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">Rank <span className="text-gray-400 text-xs">(optional)</span></label>
-            <input
-              name="rank"
-              value={formData.rank}
-              onChange={handleChange}
-              placeholder="e.g. Lieutenant"
-              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              disabled={isSubmitting}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-gray-700">
-              Branch / Division <span className="text-gray-400 text-xs">(optional)</span>
-            </label>
-            <input
-              name="branch"
-              value={formData.branch}
-              onChange={handleChange}
-              placeholder="e.g. Navigation Division"
-              className="mt-1 w-full rounded-xl border border-gray-300 px-3 py-2 text-sm text-gray-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              disabled={isSubmitting}
-            />
           </div>
         </div>
 

@@ -20,6 +20,8 @@ const EventsTable = () => {
     total: 0,
     totalPages: 0
   });
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
 
   // Fetch events with server-side pagination (Oasis pattern)
   const fetchEvents = useCallback(async (page, limit, search, status, type) => {
@@ -57,14 +59,27 @@ const EventsTable = () => {
     }
   }, []);
 
-  // Initial fetch
+  // Initial fetch - only run once even in Strict Mode
   useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
     fetchEvents(1, 10, "", "", "");
-  }, [fetchEvents]);
+    // Mark initial mount as complete after a short delay to allow other effects to skip
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search (300ms like Oasis)
   const searchTimeoutRef = useRef(null);
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -82,6 +97,10 @@ const EventsTable = () => {
 
   // Handle filter changes - trigger API call
   useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
     fetchEvents(1, pagination.limit, searchTerm, statusFilter, typeFilter);
   }, [statusFilter, typeFilter, fetchEvents, pagination.limit, searchTerm]);
 
