@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { ArrowLeft, Save, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui";
 import * as userAPI from "@/lib/api/user";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditUserPage() {
   const router = useRouter();
@@ -107,24 +108,26 @@ export default function EditUserPage() {
       
       // Use plain object for user data
       const userData = {
-          firstName: formData.firstName.trim(),
-          lastName: formData.lastName.trim(),
-          email: formData.email.trim(),
-          phone: formData.phone?.trim() || undefined,
-          role: formData.role,
-          status: formData.status
-        };
-      }
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        phone: formData.phone?.trim() || undefined,
+        role: formData.role,
+        status: formData.status
+      };
       
       const response = await userAPI.updateUser(id, userData);
 
       if (response.success) {
-        router.push('/users');
+        showSuccess('User Updated!', 'The user has been updated successfully.');
+        setTimeout(() => {
+          router.push('/users');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update user');
+        showError('Error', response.message || 'Failed to update user');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update user');
+      showError('Error', err.message || 'Failed to update user');
     } finally {
       setSubmitting(false);
     }

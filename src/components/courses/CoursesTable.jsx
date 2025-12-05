@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import { Search, Filter, Eye, Edit, Trash2, Plus } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const CoursesTable = () => {
   const router = useRouter();
@@ -60,7 +61,9 @@ const CoursesTable = () => {
       }
     } catch (err) {
       console.error('Error fetching courses:', err);
-      setError(err.message || 'Failed to fetch courses');
+      const errorMsg = err.message || 'Failed to fetch courses';
+      setError(errorMsg);
+      showError('Error Loading Courses', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -290,16 +293,24 @@ const CoursesTable = () => {
   };
 
   const handleDelete = async (course) => {
-    if (confirm(`Are you sure you want to delete "${course.title}"?`)) {
+    const result = await showDeleteConfirm(
+      `Delete "${course.title}"?`,
+      'This action cannot be undone. All course data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
       try {
         const response = await courseAPI.deleteCourse(course.id);
         if (response.success) {
+          showSuccess('Course Deleted!', `"${course.title}" has been deleted successfully.`);
           // Refresh current page
           await fetchCourses(pagination.page, pagination.limit, searchTerm, statusFilter, categoryFilter, typeFilter);
           await fetchStats();
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete course');
         }
       } catch (err) {
-        alert(err.message || 'Failed to delete course');
+        showError('Error', err.message || 'Failed to delete course');
       }
     }
   };

@@ -9,6 +9,7 @@ import Link from "next/link";
 import * as lessonAPI from "@/lib/api/lesson";
 import * as chapterAPI from "@/lib/api/chapter";
 import * as lessonContentAPI from "@/lib/api/lessonContent";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function LessonsPage() {
   const router = useRouter();
@@ -58,7 +59,9 @@ export default function LessonsPage() {
       }
     } catch (err) {
       console.error('Error fetching lessons:', err);
-      setError(err.message || 'Failed to fetch lessons');
+      const errorMsg = err.message || 'Failed to fetch lessons';
+      setError(errorMsg);
+      showError('Error Loading Lessons', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -160,17 +163,23 @@ export default function LessonsPage() {
   }, [fetchLessons, searchTerm, filterChapter]);
 
   const handleDelete = async (lessonId) => {
-    if (!confirm("Are you sure you want to delete this lesson?")) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Delete Lesson?',
+      'This action cannot be undone. All lesson data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await lessonAPI.deleteLesson(lessonId);
       if (response.success) {
+          showSuccess('Lesson Deleted!', 'The lesson has been deleted successfully.');
         await fetchLessons(pagination.page, pagination.limit, searchTerm, filterChapter);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete lesson');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete lesson');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete lesson');
     }
   };
 

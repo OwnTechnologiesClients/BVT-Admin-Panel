@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Badge } from "@/components/ui";
 import { Plus, Trash2, Edit, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import * as categoryAPI from "@/lib/api/courseCategory";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const CategoryManager = () => {
   const router = useRouter();
@@ -94,7 +95,7 @@ const CategoryManager = () => {
 
   const handleSaveCategory = async (category) => {
     if (!category.name || !category.description) {
-      alert('Please provide name and description');
+      showError('Validation Error', 'Please provide name and description');
       return;
     }
 
@@ -111,36 +112,48 @@ const CategoryManager = () => {
         // Create new category
         const response = await categoryAPI.createCategory(categoryData);
         if (response.success) {
+          showSuccess('Category Created!', 'The category has been created successfully.');
           await fetchCategories(pagination.page, pagination.limit);
           setEditingCategory(null);
+        } else {
+          showError('Error', response.message || 'Failed to create category');
         }
       } else {
         // Update existing category
         const response = await categoryAPI.updateCategory(category._id, categoryData);
         if (response.success) {
+          showSuccess('Category Updated!', 'The category has been updated successfully.');
           await fetchCategories(pagination.page, pagination.limit);
           setEditingCategory(null);
+        } else {
+          showError('Error', response.message || 'Failed to update category');
         }
       }
     } catch (err) {
-      alert(err.message || 'Failed to save category');
+      showError('Error', err.message || 'Failed to save category');
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteCategory = async (categoryId) => {
-    if (!confirm('Are you sure you want to delete this category?')) {
-      return;
-    }
-
-    try {
-      const response = await categoryAPI.deleteCategory(categoryId);
-      if (response.success) {
-        await fetchCategories(pagination.page, pagination.limit);
+    const result = await showDeleteConfirm(
+      'Delete Category?',
+      'This action cannot be undone. All category data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
+      try {
+        const response = await categoryAPI.deleteCategory(categoryId);
+        if (response.success) {
+          showSuccess('Category Deleted!', 'The category has been deleted successfully.');
+          await fetchCategories(pagination.page, pagination.limit);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete category');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete category');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete category');
     }
   };
 

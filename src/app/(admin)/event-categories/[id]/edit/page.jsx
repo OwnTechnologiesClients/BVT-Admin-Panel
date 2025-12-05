@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as categoryAPI from "@/lib/api/eventCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditEventCategoryPage({ params }) {
   const router = useRouter();
@@ -40,11 +41,15 @@ export default function EditEventCategoryPage({ params }) {
             status: response.data.isActive !== undefined ? (response.data.isActive ? "active" : "inactive") : "active"
           });
         } else {
-          setError('Theme not found');
+          const errorMsg = 'Theme not found';
+          setError(errorMsg);
+          showError('Error', errorMsg);
         }
       } catch (err) {
         console.error('Error fetching category:', err);
-        setError(err.message || 'Failed to fetch theme');
+        const errorMsg = err.message || 'Failed to fetch theme';
+        setError(errorMsg);
+        showError('Error', errorMsg);
       } finally {
         setLoading(false);
       }
@@ -116,12 +121,15 @@ export default function EditEventCategoryPage({ params }) {
       });
 
       if (response.success) {
+        showSuccess('Theme Updated!', 'The event theme has been updated successfully.');
+        setTimeout(() => {
         router.push('/event-categories');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update theme');
+        showError('Error', response.message || 'Failed to update theme');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update theme');
+      showError('Error', err.message || 'Failed to update theme');
     } finally {
       setSubmitting(false);
     }

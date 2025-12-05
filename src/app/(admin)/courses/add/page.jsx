@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Loader2, Trash2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import * as categoryAPI from "@/lib/api/courseCategory";
 import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddCoursePage() {
   const router = useRouter();
@@ -101,13 +102,13 @@ export default function AddCoursePage() {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+        showError('Invalid File Type', 'Please select an image file');
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+        showError('File Too Large', 'Image size should be less than 5MB');
         return;
       }
 
@@ -208,12 +209,15 @@ export default function AddCoursePage() {
       const response = await courseAPI.createCourse(formDataObj);
       
       if (response.success) {
+        showSuccess('Course Created!', 'The course has been created successfully.');
+        setTimeout(() => {
         router.push('/courses');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to create course');
+        showError('Failed to Create Course', response.message || 'Failed to create course');
       }
     } catch (err) {
-      alert(err.message || 'Failed to create course');
+      showError('Error', err.message || 'Failed to create course');
     } finally {
       setSubmitting(false);
     }

@@ -16,6 +16,7 @@ import {
   ChevronDownIcon,
   HorizontaLDots,
   ClipboardListIcon,
+  EnvelopeIcon,
 } from "../icons/index";
 
 const adminNavItems = [
@@ -108,11 +109,14 @@ const adminNavItems = [
 
 const adminOthersItems = [
   {
+    icon: <EnvelopeIcon />,
+    name: "Support Inquiries",
+    path: "/support-inquiries",
+  },
+  {
     icon: <ClipboardListIcon />,
-    name: "Notifications",
-    subItems: [
-      { name: "Student Queries", path: "/notifications" },
-    ],
+    name: "Student Queries",
+    path: "/notifications",
   },
 ];
 

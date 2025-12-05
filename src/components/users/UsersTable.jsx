@@ -6,6 +6,7 @@ import { Badge, Button } from "@/components/ui";
 import { Eye, Edit, Trash2, Plus, Filter, Search } from "lucide-react";
 import Link from "next/link";
 import * as userAPI from "@/lib/api/user";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const UsersTable = () => {
   const router = useRouter();
@@ -60,7 +61,9 @@ const UsersTable = () => {
       }
     } catch (err) {
       console.error('Error fetching users:', err);
-      setError(err.message || 'Failed to fetch users');
+      const errorMsg = err.message || 'Failed to fetch users';
+      setError(errorMsg);
+      showError('Error Loading Users', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -157,20 +160,24 @@ const UsersTable = () => {
   const formattedUsers = users.map(formatUser);
 
   const handleDelete = async (userId) => {
-    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Delete User?',
+      'This action cannot be undone. All user data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await userAPI.deleteUser(userId);
       if (response.success) {
+          showSuccess('User Deleted!', 'The user has been deleted successfully.');
         await fetchUsers(pagination.page, pagination.limit, searchTerm, roleFilter, statusFilter);
         fetchStats();
       } else {
-        alert(response.message || 'Failed to delete user');
+          showError('Delete Failed', response.message || 'Failed to delete user');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete user');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete user');
     }
   };
 

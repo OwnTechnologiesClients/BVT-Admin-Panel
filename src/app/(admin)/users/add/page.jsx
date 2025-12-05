@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2, X } from "lucide-react";
 import * as userAPI from "@/lib/api/user";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddUserPage() {
   const router = useRouter();
@@ -98,12 +99,15 @@ export default function AddUserPage() {
       const response = await userAPI.createUser(userData);
 
       if (response.success) {
-        router.push('/users');
+        showSuccess('User Created!', 'The user has been created successfully.');
+        setTimeout(() => {
+          router.push('/users');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to create user');
+        showError('Error', response.message || 'Failed to create user');
       }
     } catch (err) {
-      alert(err.message || 'Failed to create user');
+      showError('Error', err.message || 'Failed to create user');
     } finally {
       setSubmitting(false);
     }

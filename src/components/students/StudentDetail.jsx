@@ -5,6 +5,7 @@ import { ComponentCard } from "@/components/common/ComponentCard";
 import { Badge, Button } from "@/components/ui";
 import { getAllCourses } from "@/lib/api/course";
 import { getStudentEnrollments, createEnrollment, deleteEnrollment } from "@/lib/api/enrollment";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const InfoRow = ({ label, value }) => (
   <div>
@@ -185,10 +186,12 @@ const StudentDetail = ({ student }) => {
   };
 
   const handleRemoveCourse = async (enrollmentId) => {
-    if (!confirm("Are you sure you want to unenroll this student from the course?")) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Unenroll Student?',
+      'Are you sure you want to unenroll this student from the course?'
+    );
+    
+    if (result.isConfirmed) {
     try {
       setError(null);
       setLoadingCourses(true);
@@ -196,17 +199,23 @@ const StudentDetail = ({ student }) => {
       const response = await deleteEnrollment(enrollmentId);
 
       if (response.success) {
+          showSuccess('Student Unenrolled!', 'The student has been unenrolled from the course successfully.');
         // Remove from local state
         setCourses((prev) => prev.filter((c) => c.enrollmentId !== enrollmentId));
         setEnrollments((prev) => prev.filter((e) => e._id !== enrollmentId));
       } else {
-        setError(response.message || "Failed to unenroll student");
+          const errorMsg = response.message || "Failed to unenroll student";
+          setError(errorMsg);
+          showError('Error', errorMsg);
       }
     } catch (err) {
       console.error("Error deleting enrollment:", err);
-      setError(err.message || "An error occurred while unenrolling student");
+        const errorMsg = err.message || "An error occurred while unenrolling student";
+        setError(errorMsg);
+        showError('Error', errorMsg);
     } finally {
       setLoadingCourses(false);
+      }
     }
   };
 

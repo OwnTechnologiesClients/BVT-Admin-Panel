@@ -7,6 +7,7 @@ import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Calendar, MapPin, Users, Clo
 import * as eventAPI from "@/lib/api/event";
 import * as eventCategoryAPI from "@/lib/api/eventCategory";
 import * as courseCategoryAPI from "@/lib/api/courseCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
   const router = useRouter();
@@ -361,12 +362,18 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
       }
       
       if (response.success) {
+        showSuccess(
+          isEdit ? 'Event Updated!' : 'Event Created!',
+          `The event has been ${isEdit ? 'updated' : 'created'} successfully.`
+        );
+        setTimeout(() => {
         router.push('/events');
+        }, 1500);
       } else {
-        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} event`);
+        showError('Error', response.message || `Failed to ${isEdit ? 'update' : 'create'} event`);
       }
     } catch (err) {
-      alert(err.message || 'Failed to create event');
+      showError('Error', err.message || 'Failed to create event');
     } finally {
       setSubmitting(false);
     }

@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as categoryAPI from "@/lib/api/eventCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddEventCategoryPage() {
   const router = useRouter();
@@ -81,12 +82,15 @@ export default function AddEventCategoryPage() {
       });
 
       if (response.success) {
+        showSuccess('Theme Created!', 'The event theme has been created successfully.');
+        setTimeout(() => {
         router.push('/event-categories');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to create theme');
+        showError('Error', response.message || 'Failed to create theme');
       }
     } catch (err) {
-      alert(err.message || 'Failed to create theme');
+      showError('Error', err.message || 'Failed to create theme');
     } finally {
       setSubmitting(false);
     }

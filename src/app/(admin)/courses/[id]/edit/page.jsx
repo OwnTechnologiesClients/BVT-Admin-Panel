@@ -6,6 +6,7 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import * as categoryAPI from "@/lib/api/courseCategory";
 import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditCoursePage() {
   const router = useRouter();
@@ -131,12 +132,15 @@ export default function EditCoursePage() {
       const response = await courseAPI.updateCourse(id, formDataObj);
 
       if (response.success) {
-        router.push('/courses');
+        showSuccess('Course Updated!', 'The course has been updated successfully.');
+        setTimeout(() => {
+          router.push('/courses');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update course');
+        showError('Error', response.message || 'Failed to update course');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update course');
+      showError('Error', err.message || 'Failed to update course');
     } finally {
       setSubmitting(false);
     }

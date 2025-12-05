@@ -7,6 +7,7 @@ import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as chapterAPI from "@/lib/api/chapter";
 import * as courseAPI from "@/lib/api/course";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditChapterPage({ params }) {
   const { id } = use(params);
@@ -76,7 +77,7 @@ export default function EditChapterPage({ params }) {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert('Please fill in all required fields');
+      showError('Validation Error', 'Please fill in all required fields');
       return;
     }
     
@@ -90,12 +91,15 @@ export default function EditChapterPage({ params }) {
       });
 
       if (response.success) {
+        showSuccess('Chapter Updated!', 'The chapter has been updated successfully.');
+        setTimeout(() => {
         router.push('/chapters');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update chapter');
+        showError('Error', response.message || 'Failed to update chapter');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update chapter');
+      showError('Error', err.message || 'Failed to update chapter');
     } finally {
       setSubmitting(false);
     }

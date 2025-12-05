@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as categoryAPI from "@/lib/api/courseCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddCourseCategoryPage() {
   const router = useRouter();
@@ -79,12 +80,15 @@ export default function AddCourseCategoryPage() {
       });
 
       if (response.success) {
-        router.push('/course-categories');
+        showSuccess('Category Created!', 'The category has been created successfully.');
+        setTimeout(() => {
+          router.push('/course-categories');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to create category');
+        showError('Error', response.message || 'Failed to create category');
       }
     } catch (err) {
-      alert(err.message || 'Failed to create category');
+      showError('Error', err.message || 'Failed to create category');
     } finally {
       setSubmitting(false);
     }

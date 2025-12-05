@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as categoryAPI from "@/lib/api/courseCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditCategoryPage({ params }) {
   const router = useRouter();
@@ -36,11 +37,15 @@ export default function EditCategoryPage({ params }) {
             status: response.data.isActive !== undefined ? (response.data.isActive ? "active" : "inactive") : "active"
           });
         } else {
-          setError('Category not found');
+          const errorMsg = 'Category not found';
+          setError(errorMsg);
+          showError('Error', errorMsg);
         }
       } catch (err) {
         console.error('Error fetching category:', err);
-        setError(err.message || 'Failed to fetch category');
+        const errorMsg = err.message || 'Failed to fetch category';
+        setError(errorMsg);
+        showError('Error', errorMsg);
       } finally {
         setLoading(false);
       }
@@ -111,12 +116,15 @@ export default function EditCategoryPage({ params }) {
       });
 
       if (response.success) {
-        router.push('/course-categories');
+        showSuccess('Category Updated!', 'The category has been updated successfully.');
+        setTimeout(() => {
+          router.push('/course-categories');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update category');
+        showError('Error', response.message || 'Failed to update category');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update category');
+      showError('Error', err.message || 'Failed to update category');
     } finally {
       setSubmitting(false);
     }

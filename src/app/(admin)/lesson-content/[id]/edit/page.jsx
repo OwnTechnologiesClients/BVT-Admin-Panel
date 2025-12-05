@@ -11,6 +11,7 @@ import * as courseAPI from "@/lib/api/course";
 import * as chapterAPI from "@/lib/api/chapter";
 import * as lessonAPI from "@/lib/api/lesson";
 import { extractTextFromPDF, getPDFPageCount } from "@/lib/utils/pdfExtractor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditLessonContentPage({ params }) {
   const router = useRouter();
@@ -80,13 +81,17 @@ export default function EditLessonContentPage({ params }) {
             isActive: content.isActive !== undefined ? content.isActive : true
           });
         } else {
-          alert(response.message || 'Failed to fetch lesson content');
+          showError('Error', response.message || 'Failed to fetch lesson content');
+          setTimeout(() => {
           router.push('/lesson-content');
+          }, 2000);
         }
       } catch (err) {
         console.error('Error fetching lesson content:', err);
-        alert(err.message || 'Failed to fetch lesson content');
+        showError('Error', err.message || 'Failed to fetch lesson content');
+        setTimeout(() => {
         router.push('/lesson-content');
+        }, 2000);
       } finally {
         setFetching(false);
       }
@@ -349,7 +354,7 @@ export default function EditLessonContentPage({ params }) {
       handleDocumentChange("pageCount", pageCount.toString());
     } catch (error) {
       console.error("Error extracting PDF:", error);
-      alert(`Failed to extract text from PDF: ${error.message}`);
+      showError('PDF Extraction Error', `Failed to extract text from PDF: ${error.message}`);
       // Set a placeholder message
       handleDocumentChange("extractedText", `<p>Error: Could not extract text from PDF. ${error.message}</p>`);
     } finally {
@@ -457,13 +462,16 @@ export default function EditLessonContentPage({ params }) {
       const response = await lessonContentAPI.updateLessonContent(id, contentData);
 
       if (response.success) {
+        showSuccess('Lesson Content Updated!', 'The lesson content has been updated successfully.');
+        setTimeout(() => {
         router.push('/lesson-content');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update lesson content');
+        showError('Error', response.message || 'Failed to update lesson content');
       }
     } catch (err) {
       console.error('Error updating lesson content:', err);
-      alert(err.message || 'Failed to update lesson content');
+      showError('Error', err.message || 'Failed to update lesson content');
     } finally {
       setSubmitting(false);
     }

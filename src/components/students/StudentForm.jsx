@@ -109,26 +109,34 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
     if (!studentId) {
       // Creating new student - password is required
       if (!formData.password || formData.password.length < 6) {
-        setError("Password must be at least 6 characters long");
+        const errorMsg = "Password must be at least 6 characters long";
+        setError(errorMsg);
+        showError('Validation Error', errorMsg);
         setIsSubmitting(false);
         return;
       }
 
       if (formData.password !== formData.confirmPassword) {
-        setError("Passwords do not match");
+        const errorMsg = "Passwords do not match";
+        setError(errorMsg);
+        showError('Validation Error', errorMsg);
         setIsSubmitting(false);
         return;
       }
     } else {
       // Editing existing student - password is optional
       if (formData.password && formData.password.length < 6) {
-        setError("Password must be at least 6 characters long");
+        const errorMsg = "Password must be at least 6 characters long";
+        setError(errorMsg);
+        showError('Validation Error', errorMsg);
         setIsSubmitting(false);
         return;
       }
 
       if (formData.password && formData.password !== formData.confirmPassword) {
-        setError("Passwords do not match");
+        const errorMsg = "Passwords do not match";
+        setError(errorMsg);
+        showError('Validation Error', errorMsg);
         setIsSubmitting(false);
         return;
       }
@@ -213,22 +221,32 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
       }
 
       if (response.success) {
+        showSuccess(
+          studentId ? 'Student Updated!' : 'Student Created!',
+          `The student has been ${studentId ? 'updated' : 'created'} successfully.`
+        );
         if (onSuccess) {
           onSuccess(response.data?.student);
         } else {
           // Default: redirect to students list or student detail page
+          setTimeout(() => {
           if (studentId) {
             router.push(`/students/${studentId}`);
           } else {
             router.push("/students");
           }
+          }, 1500);
         }
       } else {
-        setError(response.message || `Failed to ${studentId ? 'update' : 'create'} student`);
+        const errorMsg = response.message || `Failed to ${studentId ? 'update' : 'create'} student`;
+        setError(errorMsg);
+        showError('Error', errorMsg);
       }
     } catch (err) {
-      setError(err.message || `An error occurred while ${studentId ? 'updating' : 'creating'} the student`);
+      const errorMsg = err.message || `An error occurred while ${studentId ? 'updating' : 'creating'} the student`;
+      setError(errorMsg);
       console.error(`Error ${studentId ? 'updating' : 'creating'} student:`, err);
+      showError('Error', errorMsg);
     } finally {
       setIsSubmitting(false);
     }

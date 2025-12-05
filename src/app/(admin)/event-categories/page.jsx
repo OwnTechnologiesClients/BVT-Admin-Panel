@@ -7,6 +7,7 @@ import { Badge, Button } from "@/components/ui";
 import { Plus, Trash2, Edit, BookOpen, Eye, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import * as categoryAPI from "@/lib/api/eventCategory";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function EventCategoriesPage() {
   const router = useRouter();
@@ -70,7 +71,9 @@ export default function EventCategoriesPage() {
       }
     } catch (err) {
       console.error('Error fetching categories:', err);
-      setError(err.message || 'Failed to fetch categories');
+      const errorMsg = err.message || 'Failed to fetch categories';
+      setError(errorMsg);
+      showError('Error Loading Event Themes', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -92,17 +95,23 @@ export default function EventCategoriesPage() {
   };
 
   const handleDelete = async (categoryId) => {
-    if (!confirm("Are you sure you want to delete this theme?")) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Delete Event Theme?',
+      'This action cannot be undone. All theme data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await categoryAPI.deleteCategory(categoryId);
       if (response.success) {
+          showSuccess('Theme Deleted!', 'The event theme has been deleted successfully.');
         await fetchCategories(pagination.page, pagination.limit);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete theme');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete theme');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete theme');
     }
   };
 

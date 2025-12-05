@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
 import { ArrowLeft, Edit, Trash2, Users, Calendar, MapPin, Clock, DollarSign, Loader2 } from "lucide-react";
 import * as eventAPI from "@/lib/api/event";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function EventDetailsPage({ params }) {
   const router = useRouter();
@@ -40,22 +41,28 @@ export default function EventDetailsPage({ params }) {
   }, [id]);
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete "${eventData?.title}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      const response = await eventAPI.deleteEvent(id);
-      if (response.success) {
-        router.push('/events');
-      } else {
-        alert(response.message || 'Failed to delete event');
+    const result = await showDeleteConfirm(
+      `Delete "${eventData?.title}"?`,
+      'This action cannot be undone. All event data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
+      try {
+        setDeleting(true);
+        const response = await eventAPI.deleteEvent(id);
+        if (response.success) {
+          showSuccess('Event Deleted!', `"${eventData?.title}" has been deleted successfully.`);
+          setTimeout(() => {
+            router.push('/events');
+          }, 1500);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete event');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete event');
+      } finally {
+        setDeleting(false);
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete event');
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -94,7 +101,7 @@ export default function EventDetailsPage({ params }) {
     );
   }
 
-  // Format event type
+  // Format event type - handle both object and string
   const typeMap = {
     'conference': 'Conference',
     'workshop': 'Workshop',
@@ -102,7 +109,17 @@ export default function EventDetailsPage({ params }) {
     'seminar': 'Seminar',
     'meeting': 'Meeting'
   };
-  const eventType = typeMap[eventData.eventType] || eventData.eventType || 'N/A';
+  const getEventType = (eventType) => {
+    if (!eventType) return 'N/A';
+    if (typeof eventType === 'object' && eventType !== null) {
+      return eventType.name || 'N/A';
+    }
+    if (typeof eventType === 'string') {
+      return typeMap[eventType] || eventType || 'N/A';
+    }
+    return 'N/A';
+  };
+  const eventType = getEventType(eventData.eventType);
 
   // Determine status based on dates
   let status = "Upcoming";
@@ -193,7 +210,16 @@ export default function EventDetailsPage({ params }) {
 
           <div className="flex flex-wrap gap-2">
             <Badge color="info">{eventType}</Badge>
-            <Badge color="default">{eventData.category?.name || eventData.category || 'N/A'}</Badge>
+            <Badge color="default">
+              {(() => {
+                const category = eventData.category;
+                if (!category) return 'N/A';
+                if (typeof category === 'object' && category !== null) {
+                  return category.name || 'N/A';
+                }
+                return String(category);
+              })()}
+            </Badge>
             <Badge color={status === "Upcoming" ? "info" : status === "Ongoing" ? "warning" : "success"}>
               {status}
             </Badge>

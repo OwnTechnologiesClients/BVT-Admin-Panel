@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { Badge, Button } from "@/components/ui";
 import { X, MessageCircle, AlertTriangle, Clock3, Paperclip, File, XCircle, Download } from "lucide-react";
 import * as queryAPI from "@/lib/api/studentQuery";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const priorityColors = {
   Critical: "error",
@@ -80,13 +81,16 @@ const StudentQueryModal = ({ isOpen, onClose, query, onSendReply }) => {
       setSending(true);
       const response = await queryAPI.addMessage(query._id || query.id, reply.trim(), attachments);
       if (response.success) {
+        showSuccess('Reply Sent!', 'Your reply has been sent successfully.');
         onSendReply(reply.trim());
         setReply("");
         setAttachments([]);
+      } else {
+        showError('Failed to Send Reply', response.message || 'Unknown error');
       }
     } catch (error) {
       console.error("Error sending reply:", error);
-      alert("Failed to send reply: " + (error.message || "Unknown error"));
+      showError('Error', "Failed to send reply: " + (error.message || "Unknown error"));
     } finally {
       setSending(false);
     }
@@ -99,14 +103,15 @@ const StudentQueryModal = ({ isOpen, onClose, query, onSendReply }) => {
       setUpdatingStatus(true);
       const response = await queryAPI.updateQueryStatus(query._id || query.id, newStatus);
       if (response.success) {
+        showSuccess('Status Updated!', `Query status has been updated to ${newStatus}.`);
         // Refresh the query data by calling onSendReply which will trigger parent refresh
         onSendReply(""); // This will trigger a refresh in the parent component
       } else {
-        alert("Failed to update status: " + (response.message || "Unknown error"));
+        showError('Failed to Update Status', response.message || "Unknown error");
       }
     } catch (error) {
       console.error("Error updating status:", error);
-      alert("Failed to update status: " + (error.message || "Unknown error"));
+      showError('Error', "Failed to update status: " + (error.message || "Unknown error"));
     } finally {
       setUpdatingStatus(false);
     }

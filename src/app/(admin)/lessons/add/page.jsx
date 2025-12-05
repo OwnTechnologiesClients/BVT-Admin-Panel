@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import * as chapterAPI from "@/lib/api/chapter";
 import * as lessonAPI from "@/lib/api/lesson";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddLessonPage() {
   const router = useRouter();
@@ -129,12 +130,15 @@ export default function AddLessonPage() {
       });
 
       if (response.success) {
+        showSuccess('Lesson Created!', 'The lesson has been created successfully.');
+        setTimeout(() => {
         router.push('/lessons');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to create lesson');
+        showError('Error', response.message || 'Failed to create lesson');
       }
     } catch (err) {
-      alert(err.message || 'Failed to create lesson');
+      showError('Error', err.message || 'Failed to create lesson');
     } finally {
       setSubmitting(false);
     }

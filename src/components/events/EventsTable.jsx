@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import { Search, Filter, Eye, Edit, Trash2, Plus } from "lucide-react";
 import * as eventAPI from "@/lib/api/event";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const EventsTable = () => {
   const router = useRouter();
@@ -53,7 +54,9 @@ const EventsTable = () => {
       }
     } catch (err) {
       console.error('Error fetching events:', err);
-      setError(err.message || 'Failed to fetch events');
+      const errorMsg = err.message || 'Failed to fetch events';
+      setError(errorMsg);
+      showError('Error Loading Events', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -338,18 +341,24 @@ const EventsTable = () => {
   };
 
   const handleDelete = async (event) => {
-    if (!confirm(`Are you sure you want to delete "${event.title}"?`)) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      `Delete "${event.title}"?`,
+      'This action cannot be undone. All event data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await eventAPI.deleteEvent(event.id);
       if (response.success) {
+          showSuccess('Event Deleted!', `"${event.title}" has been deleted successfully.`);
         // Refresh current page
         await fetchEvents(pagination.page, pagination.limit, searchTerm, statusFilter, typeFilter);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete event');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete event');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete event');
     }
   };
 

@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Loader2, Trash2, Upload } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import * as categoryAPI from "@/lib/api/courseCategory";
 import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function UpdateCoursePage({ params }) {
   const router = useRouter();
@@ -133,13 +134,13 @@ export default function UpdateCoursePage({ params }) {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+        showError('Invalid File Type', 'Please select an image file.');
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+        showError('File Too Large', 'Image size should be less than 5MB.');
         return;
       }
 
@@ -241,12 +242,15 @@ export default function UpdateCoursePage({ params }) {
       const response = await courseAPI.updateCourse(id, formDataObj);
       
       if (response.success) {
-        router.push('/courses');
+        showSuccess('Course Updated!', 'The course has been updated successfully.');
+        setTimeout(() => {
+          router.push('/courses');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update course');
+        showError('Error', response.message || 'Failed to update course');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update course');
+      showError('Error', err.message || 'Failed to update course');
     } finally {
       setSubmitting(false);
     }

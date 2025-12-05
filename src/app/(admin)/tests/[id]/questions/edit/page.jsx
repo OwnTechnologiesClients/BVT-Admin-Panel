@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Save, Trash2, Upload, Plus, Loader2 } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import { Button } from "@/components/ui";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditQuestionsPage({ params }) {
   const router = useRouter();
@@ -85,7 +86,7 @@ export default function EditQuestionsPage({ params }) {
     if (questions.length > 1) {
       setQuestions(questions.filter((_, i) => i !== qIndex));
     } else {
-      alert("At least one question is required");
+      showError('Validation Error', 'At least one question is required');
     }
   };
 
@@ -131,17 +132,17 @@ export default function EditQuestionsPage({ params }) {
       for (let i = 0; i < questionsData.length; i++) {
         const q = questionsData[i];
         if (!q.question || q.question.length === 0) {
-          alert(`Question ${i + 1} is required`);
+          showError('Validation Error', `Question ${i + 1} is required`);
           setSaving(false);
           return;
         }
         if (!q.options || q.options.length < 2) {
-          alert(`Question ${i + 1} must have at least 2 options`);
+          showError('Validation Error', `Question ${i + 1} must have at least 2 options`);
           setSaving(false);
           return;
         }
         if (q.correctAnswer < 0 || q.correctAnswer >= q.options.length) {
-          alert(`Question ${i + 1} must have a valid correct answer`);
+          showError('Validation Error', `Question ${i + 1} must have a valid correct answer`);
           setSaving(false);
           return;
         }
@@ -176,14 +177,16 @@ export default function EditQuestionsPage({ params }) {
       }
 
       if (response.success) {
-        alert("Questions updated successfully!");
-        router.back();
+        showSuccess('Questions Updated!', 'The test questions have been updated successfully.');
+        setTimeout(() => {
+          router.back();
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update questions');
+        showError('Error', response.message || 'Failed to update questions');
       }
     } catch (err) {
       console.error('Error saving questions:', err);
-      alert(err.message || 'Failed to save questions');
+      showError('Error', err.message || 'Failed to save questions');
     } finally {
       setSaving(false);
     }

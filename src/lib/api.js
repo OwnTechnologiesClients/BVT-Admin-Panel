@@ -89,15 +89,28 @@ const apiRequest = async (endpoint, options = {}, skipJsonParsing = false) => {
     }
 
     if (!response.ok) {
-      // Handle 401 (Unauthorized) - token expired or invalid
-      if (response.status === 401) {
+      const errorMessage = data.message || `Server error: ${response.status} ${response.statusText}`;
+      
+      // Check for authentication/authorization errors
+      const isAuthError = 
+        response.status === 401 || // Unauthorized
+        response.status === 403 || // Forbidden
+        errorMessage.toLowerCase().includes('access denied') ||
+        errorMessage.toLowerCase().includes('required role') ||
+        errorMessage.toLowerCase().includes('invalid token') ||
+        errorMessage.toLowerCase().includes('token expired') ||
+        errorMessage.toLowerCase().includes('no token provided') ||
+        errorMessage.toLowerCase().includes('please login');
+      
+      if (isAuthError) {
         removeToken();
         // Redirect to login if we're not already there
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login';
         }
       }
-      throw new Error(data.message || `Server error: ${response.status} ${response.statusText}`);
+      
+      throw new Error(errorMessage);
     }
 
     return data;

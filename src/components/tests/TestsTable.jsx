@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui";
 import { Search, Filter, Eye, Edit, Trash2, Plus } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import * as courseAPI from "@/lib/api/course";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const TestsTable = () => {
   const router = useRouter();
@@ -55,7 +56,9 @@ const TestsTable = () => {
       }
     } catch (err) {
       console.error('Error fetching tests:', err);
-      setError(err.message || 'Failed to fetch tests');
+      const errorMsg = err.message || 'Failed to fetch tests';
+      setError(errorMsg);
+      showError('Error Loading Tests', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -242,24 +245,30 @@ const TestsTable = () => {
   };
 
   const handleEdit = (test) => {
-    router.push(`/tests/update/${test.id}`);
+    router.push(`/tests/${test.id}/edit`);
   };
 
   const handleDelete = async (test) => {
-    if (!confirm(`Are you sure you want to delete "${test.title}"?`)) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      `Delete "${test.title}"?`,
+      'This action cannot be undone. All test data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await testAPI.deleteTest(test.id);
       if (response.success) {
+          showSuccess('Test Deleted!', `"${test.title}" has been deleted successfully.`);
         // Refresh current page
         const isActive = statusFilter === "Active" ? true : statusFilter === "Inactive" ? false : undefined;
         const courseId = courseFilter || "";
         await fetchTests(pagination.page, pagination.limit, searchTerm, courseId, isActive);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete test');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete test');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete test');
     }
   };
 

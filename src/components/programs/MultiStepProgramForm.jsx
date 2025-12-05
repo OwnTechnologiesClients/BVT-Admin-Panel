@@ -6,6 +6,7 @@ import { Button, Switch } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, GraduationCap, Users, Award, Calendar, Loader2 } from "lucide-react";
 import * as programAPI from "@/lib/api/program";
 import * as categoryAPI from "@/lib/api/courseCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const MultiStepProgramForm = ({ initialData = null, isEdit = false }) => {
   const router = useRouter();
@@ -263,47 +264,47 @@ const MultiStepProgramForm = ({ initialData = null, isEdit = false }) => {
 
       // Validate required fields
       if (!formData.title || !formData.title.trim()) {
-        alert('Program title is required');
+        showError('Validation Error', 'Program title is required');
         setSubmitting(false);
         return;
       }
       if (!formData.category) {
-        alert('Category is required');
+        showError('Validation Error', 'Category is required');
         setSubmitting(false);
         return;
       }
       if (!formData.programDirector || !formData.programDirector.trim()) {
-        alert('Program director is required');
+        showError('Validation Error', 'Program director is required');
         setSubmitting(false);
         return;
       }
       if (!formData.duration || !formData.duration.trim()) {
-        alert('Duration is required');
+        showError('Validation Error', 'Duration is required');
         setSubmitting(false);
         return;
       }
       if (!formData.startDate) {
-        alert('Start date is required');
+        showError('Validation Error', 'Start date is required');
         setSubmitting(false);
         return;
       }
       if (!formData.endDate) {
-        alert('End date is required');
+        showError('Validation Error', 'End date is required');
         setSubmitting(false);
         return;
       }
       if (!formData.difficulty) {
-        alert('Difficulty level is required');
+        showError('Validation Error', 'Difficulty level is required');
         setSubmitting(false);
         return;
       }
       if (!formData.graduationRequirements || !formData.graduationRequirements.trim()) {
-        alert('Graduation requirements are required');
+        showError('Validation Error', 'Graduation requirements are required');
         setSubmitting(false);
         return;
       }
       if (cleanModules.length === 0) {
-        alert('At least one module with lessons is required');
+        showError('Validation Error', 'At least one module with lessons is required');
         setSubmitting(false);
         return;
       }
@@ -345,16 +346,22 @@ const MultiStepProgramForm = ({ initialData = null, isEdit = false }) => {
       }
       
       if (response.success) {
+        showSuccess(
+          isEdit ? 'Program Updated!' : 'Program Created!',
+          `The program has been ${isEdit ? 'updated' : 'created'} successfully.`
+        );
+        setTimeout(() => {
         router.push('/programs');
+        }, 1500);
       } else {
         const errorMessage = response.message || response.error || `Failed to ${isEdit ? 'update' : 'create'} program`;
         console.error('Program API error:', response);
-        alert(errorMessage);
+        showError('Error', errorMessage);
       }
     } catch (err) {
       console.error('Program submission error:', err);
       const errorMessage = err.message || err.response?.data?.message || 'Failed to save program. Please check the console for details.';
-      alert(errorMessage);
+      showError('Error', errorMessage);
     } finally {
       setSubmitting(false);
     }

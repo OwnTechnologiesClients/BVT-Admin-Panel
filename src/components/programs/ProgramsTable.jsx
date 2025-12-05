@@ -6,6 +6,7 @@ import { Badge, Button } from "@/components/ui";
 import { Eye, Edit, Trash2, Plus, Filter, Search, GraduationCap, Users, Award, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import * as programAPI from "@/lib/api/program";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const ProgramsTable = () => {
   const router = useRouter();
@@ -188,18 +189,24 @@ const ProgramsTable = () => {
   };
 
   const handleDelete = async (programId, programTitle) => {
-    if (!confirm(`Are you sure you want to delete "${programTitle}"?`)) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      `Delete "${programTitle}"?`,
+      'This action cannot be undone. All program data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await programAPI.deleteProgram(programId);
       if (response.success) {
+          showSuccess('Program Deleted!', `"${programTitle}" has been deleted successfully.`);
         // Refresh current page
         await fetchPrograms(pagination.page, pagination.limit, searchTerm, filterCategory);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete program');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete program');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete program');
     }
   };
 

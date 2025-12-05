@@ -9,6 +9,7 @@ import Link from "next/link";
 import * as chapterAPI from "@/lib/api/chapter";
 import * as courseAPI from "@/lib/api/course";
 import * as lessonAPI from "@/lib/api/lesson";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function ChaptersPage() {
   const router = useRouter();
@@ -58,7 +59,9 @@ export default function ChaptersPage() {
       }
     } catch (err) {
       console.error('Error fetching chapters:', err);
-      setError(err.message || 'Failed to fetch chapters');
+      const errorMsg = err.message || 'Failed to fetch chapters';
+      setError(errorMsg);
+      showError('Error Loading Chapters', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -160,17 +163,23 @@ export default function ChaptersPage() {
   }, [fetchChapters, searchTerm, filterCourse]);
 
   const handleDelete = async (chapterId) => {
-    if (!confirm("Are you sure you want to delete this chapter?")) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Delete Chapter?',
+      'This action cannot be undone. All chapter data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await chapterAPI.deleteChapter(chapterId);
       if (response.success) {
+          showSuccess('Chapter Deleted!', 'The chapter has been deleted successfully.');
         await fetchChapters(pagination.page, pagination.limit, searchTerm, filterCourse);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete chapter');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete chapter');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete chapter');
     }
   };
 

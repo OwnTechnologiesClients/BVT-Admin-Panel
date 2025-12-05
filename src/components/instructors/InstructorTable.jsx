@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Badge, Button } from "@/components/ui";
 import { Eye, Edit, Trash2, Plus, Filter, Search, Users, UserCheck, Award, BookOpen } from "lucide-react";
 import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const InstructorTable = () => {
   const router = useRouter();
@@ -83,7 +84,9 @@ const InstructorTable = () => {
       }
     } catch (err) {
       console.error('Error fetching instructors:', err);
-      setError(err.message || 'Failed to fetch instructors');
+      const errorMsg = err.message || 'Failed to fetch instructors';
+      setError(errorMsg);
+      showError('Error Loading Instructors', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -172,19 +175,25 @@ const InstructorTable = () => {
   const formattedInstructors = instructors.map(formatInstructor);
 
   const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this instructor?')) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Delete Instructor?',
+      'This action cannot be undone. All instructor data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await instructorAPI.deleteInstructor(id);
       if (response.success) {
+          showSuccess('Instructor Deleted!', 'The instructor has been deleted successfully.');
         // Refresh current page
         await fetchInstructors(pagination.page, pagination.limit, searchTerm, filterDepartment, filterStatus);
         fetchStats();
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete instructor');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete instructor');
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete instructor');
     }
   };
 

@@ -6,6 +6,7 @@ import { Button, Switch } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, ArrowUp, ChevronUp, Loader2 } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import * as courseAPI from "@/lib/api/course";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const MultiStepTestForm = ({ initialData = null, isEdit = false }) => {
   const router = useRouter();
@@ -255,12 +256,18 @@ const MultiStepTestForm = ({ initialData = null, isEdit = false }) => {
       }
       
       if (response.success) {
+        showSuccess(
+          isEdit ? 'Test Updated!' : 'Test Created!',
+          `The test has been ${isEdit ? 'updated' : 'created'} successfully.`
+        );
+        setTimeout(() => {
         router.push(`/tests`);
+        }, 1500);
       } else {
-        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} test`);
+        showError('Error', response.message || `Failed to ${isEdit ? 'update' : 'create'} test`);
       }
     } catch (err) {
-      alert(err.message || `Failed to ${isEdit ? 'update' : 'create'} test`);
+      showError('Error', err.message || `Failed to ${isEdit ? 'update' : 'create'} test`);
     } finally {
       setSubmitting(false);
     }

@@ -16,7 +16,8 @@ import {
   FaUsers,
   FaCog,
   FaChartBar,
-  FaClipboardList
+  FaClipboardList,
+  FaEnvelope
 } from 'react-icons/fa';
 
 export {
@@ -38,4 +39,5 @@ export {
   FaCog as SettingsIcon,
   FaChartBar as BarChartIcon,
   FaClipboardList as ClipboardListIcon,
+  FaEnvelope as EnvelopeIcon,
 };

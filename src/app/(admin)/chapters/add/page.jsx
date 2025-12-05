@@ -7,6 +7,7 @@ import { Button } from "@/components/ui";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import * as chapterAPI from "@/lib/api/chapter";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddChapterPage() {
   const router = useRouter();
@@ -92,12 +93,15 @@ export default function AddChapterPage() {
       });
 
       if (response.success) {
+        showSuccess('Chapter Created!', 'The chapter has been created successfully.');
+        setTimeout(() => {
         router.push('/chapters');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to create chapter');
+        showError('Error', response.message || 'Failed to create chapter');
       }
     } catch (err) {
-      alert(err.message || 'Failed to create chapter');
+      showError('Error', err.message || 'Failed to create chapter');
     } finally {
       setSubmitting(false);
     }

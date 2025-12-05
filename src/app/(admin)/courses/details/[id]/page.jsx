@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
 import { ArrowLeft, Edit, Trash2, Users, Calendar, DollarSign, Clock, Loader2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function CourseDetailsPage({ params }) {
   const router = useRouter();
@@ -44,22 +45,28 @@ export default function CourseDetailsPage({ params }) {
 
   // Handle delete
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete "${courseData?.title}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      const response = await courseAPI.deleteCourse(id);
-      if (response.success) {
-        router.push('/courses');
-      } else {
-        alert(response.message || 'Failed to delete course');
+    const result = await showDeleteConfirm(
+      `Delete "${courseData?.title}"?`,
+      'This action cannot be undone. All course data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
+      try {
+        setDeleting(true);
+        const response = await courseAPI.deleteCourse(id);
+        if (response.success) {
+          showSuccess('Course Deleted!', `"${courseData?.title}" has been deleted successfully.`);
+          setTimeout(() => {
+            router.push('/courses');
+          }, 1500);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete course');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete course');
+      } finally {
+        setDeleting(false);
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete course');
-    } finally {
-      setDeleting(false);
     }
   };
 

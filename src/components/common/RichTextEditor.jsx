@@ -8,6 +8,7 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Image from "@tiptap/extension-image";
 import TextAlign from "@tiptap/extension-text-align";
+import { showError } from "@/lib/utils/sweetalert";
 
 const RichTextEditor = ({
   value = "",
@@ -544,13 +545,13 @@ const RichTextEditor = ({
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+      showError('Invalid File Type', 'Please select an image file.');
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      alert('Image size should be less than 5MB');
+      showError('File Too Large', 'Image size should be less than 5MB.');
       return;
     }
 
@@ -576,7 +577,7 @@ const RichTextEditor = ({
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image. Please try again.');
+      showError('Upload Failed', 'Failed to upload image. Please try again.');
     }
   }, [editor, onImageUpload]);
 

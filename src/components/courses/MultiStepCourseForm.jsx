@@ -7,6 +7,7 @@ import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Loader2 } from "lucide-react
 import * as courseAPI from "@/lib/api/course";
 import * as categoryAPI from "@/lib/api/courseCategory";
 import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
   const router = useRouter();
@@ -120,13 +121,13 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+        showError('Invalid File Type', 'Please select an image file.');
         return;
       }
       
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+        showError('File Too Large', 'Image size should be less than 5MB.');
         return;
       }
 
@@ -265,12 +266,18 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
       }
       
       if (response.success) {
-        router.push('/courses');
+        showSuccess(
+          isEdit ? 'Course Updated!' : 'Course Created!',
+          `The course has been ${isEdit ? 'updated' : 'created'} successfully.`
+        );
+        setTimeout(() => {
+          router.push('/courses');
+        }, 1500);
       } else {
-        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} course`);
+        showError('Error', response.message || `Failed to ${isEdit ? 'update' : 'create'} course`);
       }
     } catch (err) {
-      alert(err.message || `Failed to ${isEdit ? 'update' : 'create'} course`);
+      showError('Error', err.message || `Failed to ${isEdit ? 'update' : 'create'} course`);
     } finally {
       setSubmitting(false);
     }

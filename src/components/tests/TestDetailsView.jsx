@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import * as enrollmentAPI from "@/lib/api/enrollment";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const defaultStudents = [
   {
@@ -403,11 +404,11 @@ const TestDetailsView = ({
         setResultsReleased(newShowResults);
       } else {
         console.error('Failed to update test:', response.message);
-        alert('Failed to update test results setting');
+        showError('Error', 'Failed to update test results setting');
       }
     } catch (err) {
       console.error('Error updating test:', err);
-      alert('Failed to update test results setting');
+      showError('Error', 'Failed to update test results setting');
     } finally {
       setUpdatingResults(false);
     }

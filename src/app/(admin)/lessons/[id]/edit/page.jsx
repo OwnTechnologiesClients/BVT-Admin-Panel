@@ -8,6 +8,7 @@ import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import * as lessonAPI from "@/lib/api/lesson";
 import * as courseAPI from "@/lib/api/course";
 import * as chapterAPI from "@/lib/api/chapter";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function EditLessonPage({ params }) {
   const router = useRouter();
@@ -113,7 +114,7 @@ export default function EditLessonPage({ params }) {
     e.preventDefault();
     
     if (!validateForm()) {
-      alert('Please fill in all required fields');
+      showError('Validation Error', 'Please fill in all required fields');
       return;
     }
     
@@ -129,12 +130,15 @@ export default function EditLessonPage({ params }) {
       });
 
       if (response.success) {
+        showSuccess('Lesson Updated!', 'The lesson has been updated successfully.');
+        setTimeout(() => {
         router.push('/lessons');
+        }, 1500);
       } else {
-        alert(response.message || 'Failed to update lesson');
+        showError('Error', response.message || 'Failed to update lesson');
       }
     } catch (err) {
-      alert(err.message || 'Failed to update lesson');
+      showError('Error', err.message || 'Failed to update lesson');
     } finally {
       setSubmitting(false);
     }

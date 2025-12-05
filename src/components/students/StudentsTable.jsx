@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import { Search, Filter, Eye, Edit, Trash2, Plus } from "lucide-react";
 import { getAllStudents, deleteStudent } from "@/lib/api/student";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const StudentsTable = () => {
   const router = useRouter();
@@ -48,11 +49,15 @@ const StudentsTable = () => {
           });
         }
       } else {
-        setError(response.message || "Failed to fetch students");
+        const errorMsg = response.message || "Failed to fetch students";
+        setError(errorMsg);
+        showError('Error Loading Students', errorMsg);
       }
     } catch (err) {
-      setError(err.message || "An error occurred while fetching students");
+      const errorMsg = err.message || "An error occurred while fetching students";
+      setError(errorMsg);
       console.error("Error fetching students:", err);
+      showError('Error Loading Students', errorMsg);
     } finally {
       setLoading(false);
     }
@@ -218,21 +223,25 @@ const StudentsTable = () => {
   };
 
   const handleDelete = async (student) => {
-    if (!confirm(`Are you sure you want to delete ${student.fullName}?`)) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      `Delete ${student.fullName}?`,
+      'This action cannot be undone. All student data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       const response = await deleteStudent(student._id);
       if (response.success) {
+          showSuccess('Student Deleted!', `${student.fullName} has been deleted successfully.`);
         // Refresh all students
         await fetchStudents(pagination.page, pagination.limit, searchTerm);
       } else {
-        alert(response.message || "Failed to delete student");
+          showError('Delete Failed', response.message || "Failed to delete student");
       }
     } catch (err) {
-      alert(err.message || "An error occurred while deleting the student");
+        showError('Error', err.message || "An error occurred while deleting the student");
       console.error("Error deleting student:", err);
+      }
     }
   };
 

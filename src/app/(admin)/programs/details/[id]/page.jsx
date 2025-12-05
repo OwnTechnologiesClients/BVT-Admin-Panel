@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
 import { ArrowLeft, Edit, Trash2, Users, Calendar, Award, Clock, DollarSign, Loader2 } from "lucide-react";
 import * as programAPI from "@/lib/api/program";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function ProgramDetailsPage({ params }) {
   const router = useRouter();
@@ -40,22 +41,28 @@ export default function ProgramDetailsPage({ params }) {
   }, [id]);
 
   const handleDelete = async () => {
-    if (!confirm(`Are you sure you want to delete "${programData?.title}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      setDeleting(true);
-      const response = await programAPI.deleteProgram(id);
-      if (response.success) {
-        router.push('/programs');
-      } else {
-        alert(response.message || 'Failed to delete program');
+    const result = await showDeleteConfirm(
+      `Delete "${programData?.title}"?`,
+      'This action cannot be undone. All program data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
+      try {
+        setDeleting(true);
+        const response = await programAPI.deleteProgram(id);
+        if (response.success) {
+          showSuccess('Program Deleted!', `"${programData?.title}" has been deleted successfully.`);
+          setTimeout(() => {
+            router.push('/programs');
+          }, 1500);
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete program');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete program');
+      } finally {
+        setDeleting(false);
       }
-    } catch (err) {
-      alert(err.message || 'Failed to delete program');
-    } finally {
-      setDeleting(false);
     }
   };
 

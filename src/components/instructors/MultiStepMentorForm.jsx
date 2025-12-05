@@ -7,6 +7,7 @@ import { Button, Switch } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Users, Award, Star, MapPin, Loader2, X } from "lucide-react";
 import * as userAPI from "@/lib/api/user";
 import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
   const router = useRouter();
@@ -367,7 +368,7 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
       
       // Validate required fields
       if (!formData.userId || !formData.department) {
-        alert('Please select a user and department');
+        showError('Validation Error', 'Please select a user and department');
         setSubmitting(false);
         return;
       }
@@ -525,12 +526,18 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
       }
       
       if (response.success) {
-        router.push('/instructors');
+        showSuccess(
+          isEdit ? 'Instructor Updated!' : 'Instructor Created!',
+          `The instructor has been ${isEdit ? 'updated' : 'created'} successfully.`
+        );
+        setTimeout(() => {
+          router.push('/instructors');
+        }, 1500);
       } else {
-        alert(response.message || `Failed to ${isEdit ? 'update' : 'create'} instructor`);
+        showError('Error', response.message || `Failed to ${isEdit ? 'update' : 'create'} instructor`);
       }
     } catch (err) {
-      alert(err.message || `Failed to ${isEdit ? 'update' : 'create'} instructor`);
+      showError('Error', err.message || `Failed to ${isEdit ? 'update' : 'create'} instructor`);
     } finally {
       setSubmitting(false);
     }

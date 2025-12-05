@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Badge, Button } from "@/components/ui";
-import { Eye, Edit, Trash2, Plus, Filter, Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Eye, Edit, Trash2, Plus, Filter, Search, ChevronLeft, ChevronRight } from "lucide-react";
 
 const DataTable = ({ 
   title, 
@@ -155,10 +155,6 @@ const DataTable = ({
             </div>
           )}
           <div className="flex items-center gap-3">
-            <Button variant="outline" className="flex items-center gap-2">
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
             {onAdd && (
               <Button variant="primary" onClick={onAdd} className="flex items-center gap-2">
                 <Plus className="w-4 h-4" />

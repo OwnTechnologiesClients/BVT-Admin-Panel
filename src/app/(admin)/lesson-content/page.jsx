@@ -6,6 +6,7 @@ import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
 import { Plus, Trash2, Edit, Eye, Video, FileText, Upload, Search, Filter, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import * as lessonContentAPI from "@/lib/api/lessonContent";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 export default function LessonContentPage() {
   const router = useRouter();
@@ -134,24 +135,28 @@ export default function LessonContentPage() {
   }));
 
   const handleDelete = async (contentId) => {
-    if (!confirm("Are you sure you want to delete this lesson content?")) {
-      return;
-    }
-
+    const result = await showDeleteConfirm(
+      'Delete Lesson Content?',
+      'This action cannot be undone. All content data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
     try {
       setDeletingId(contentId);
       const response = await lessonContentAPI.deleteLessonContent(contentId);
       if (response.success) {
+          showSuccess('Content Deleted!', 'The lesson content has been deleted successfully.');
         // Refresh current page
         await fetchLessonContents(pagination.page, pagination.limit, searchTerm, filterType);
       } else {
-        alert(response.message || 'Failed to delete lesson content');
+          showError('Delete Failed', response.message || 'Failed to delete lesson content');
       }
     } catch (err) {
       console.error('Error deleting lesson content:', err);
-      alert(err.message || 'Failed to delete lesson content');
+        showError('Error', err.message || 'Failed to delete lesson content');
     } finally {
       setDeletingId(null);
+      }
     }
   };
 
