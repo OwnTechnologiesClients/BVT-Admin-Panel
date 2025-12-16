@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Switch } from "@/components/ui";
+import { Button, Switch, SearchableSelect } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import * as categoryAPI from "@/lib/api/courseCategory";
@@ -334,46 +334,39 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Category <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
             value={formData.category}
-            onChange={(e) => handleInputChange("category", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
+            onChange={(value) => handleInputChange("category", value)}
+            options={categories}
+            placeholder="Select category"
+            displayKey="name"
+            valueKey="_id"
+            loading={loading}
             disabled={loading}
-          >
-            <option value="">Select category</option>
-            {categories.map(category => (
-              <option key={category._id} value={category._id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            required={true}
+          />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Instructor <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
             value={formData.instructor}
-            onChange={(e) => handleInputChange("instructor", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-            disabled={loading}
-          >
-            <option value="">Select instructor</option>
-            {instructors.map(instructor => {
+            onChange={(value) => handleInputChange("instructor", value)}
+            options={instructors}
+            placeholder="Select instructor"
+            displayKey={(instructor) => {
               const user = instructor.userId || {};
-              const name = user.firstName && user.lastName 
+              return user.firstName && user.lastName 
                 ? `${user.firstName} ${user.lastName}`
                 : user.username || 'N/A';
-              return (
-                <option key={instructor._id} value={instructor._id}>
-                  {name}
-                </option>
-              );
-            })}
-          </select>
+            }}
+            valueKey="_id"
+            loading={loading}
+            disabled={loading}
+            required={true}
+          />
         </div>
 
         <div>

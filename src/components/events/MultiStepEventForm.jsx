@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Switch } from "@/components/ui";
+import { Button, Switch, SearchableSelect } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Calendar, MapPin, Users, Clock, Loader2 } from "lucide-react";
 import * as eventAPI from "@/lib/api/event";
 import * as eventCategoryAPI from "@/lib/api/eventCategory";
@@ -435,38 +435,30 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Event Theme <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
             value={formData.eventType}
-            onChange={(e) => handleInputChange("eventType", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          >
-            <option value="">Select event theme</option>
-            {eventCategories.map(category => (
-              <option key={category._id} value={category._id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => handleInputChange("eventType", value)}
+            options={eventCategories}
+            placeholder="Select event theme"
+            displayKey="name"
+            valueKey="_id"
+            required={true}
+          />
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Category <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
             value={formData.category}
-            onChange={(e) => handleInputChange("category", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          >
-            <option value="">Select category</option>
-            {courseCategories.map(category => (
-              <option key={category._id} value={category._id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => handleInputChange("category", value)}
+            options={courseCategories}
+            placeholder="Select category"
+            displayKey="name"
+            valueKey="_id"
+            required={true}
+          />
         </div>
 
         <div>

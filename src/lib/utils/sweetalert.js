@@ -16,6 +16,7 @@ export const showSuccess = (title, message, confirmButtonText = 'OK') => {
     confirmButtonColor: '#10b981',
     timer: 3000,
     timerProgressBar: true,
+    zIndex: 100000,
   });
 };
 
@@ -32,6 +33,7 @@ export const showError = (title, message, confirmButtonText = 'OK') => {
     text: message,
     confirmButtonText,
     confirmButtonColor: '#ef4444',
+    zIndex: 100000,
   });
 };
 
@@ -48,6 +50,7 @@ export const showWarning = (title, message, confirmButtonText = 'OK') => {
     text: message,
     confirmButtonText,
     confirmButtonColor: '#f59e0b',
+    zIndex: 100000,
   });
 };
 
@@ -64,6 +67,7 @@ export const showInfo = (title, message, confirmButtonText = 'OK') => {
     text: message,
     confirmButtonText,
     confirmButtonColor: '#3b82f6',
+    zIndex: 100000,
   });
 };
 
@@ -92,6 +96,7 @@ export const showConfirm = (
     confirmButtonColor,
     cancelButtonColor: '#6b7280',
     reverseButtons: true,
+    zIndex: 100000,
   });
 };
 
@@ -111,6 +116,7 @@ export const showDeleteConfirm = (title, message = 'This action cannot be undone
     confirmButtonColor: '#ef4444',
     cancelButtonColor: '#6b7280',
     reverseButtons: true,
+    zIndex: 100000,
   });
 };
 
@@ -126,6 +132,7 @@ export const showLoading = (title = 'Loading...', message = 'Please wait') => {
     allowOutsideClick: false,
     allowEscapeKey: false,
     allowEnterKey: false,
+    zIndex: 100000,
     didOpen: () => {
       Swal.showLoading();
     },
@@ -152,6 +159,7 @@ export const showToast = (icon, title, timer = 3000) => {
     showConfirmButton: false,
     timer,
     timerProgressBar: true,
+    zIndex: 100000,
     didOpen: (toast) => {
       toast.addEventListener('mouseenter', Swal.stopTimer);
       toast.addEventListener('mouseleave', Swal.resumeTimer);

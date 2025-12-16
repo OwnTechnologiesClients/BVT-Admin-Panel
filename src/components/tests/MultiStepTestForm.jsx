@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Switch } from "@/components/ui";
+import { Button, Switch, SearchableSelect } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, ArrowUp, ChevronUp, Loader2 } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import * as courseAPI from "@/lib/api/course";
@@ -296,24 +296,19 @@ const MultiStepTestForm = ({ initialData = null, isEdit = false }) => {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Related Course <span className="text-red-500">*</span>
           </label>
-          <select
+          <SearchableSelect
             value={formData.courseId}
-            onChange={(e) => {
-              const selectedCourseId = e.target.value;
-              handleInputChange("courseId", selectedCourseId);
-              const selectedCourse = courses.find(c => c._id === selectedCourseId);
+            onChange={(value) => {
+              handleInputChange("courseId", value);
+              const selectedCourse = courses.find(c => c._id === value);
               handleInputChange("courseName", selectedCourse ? selectedCourse.title : "");
             }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
-          >
-            <option value="">Select a course</option>
-            {courses.map(course => (
-              <option key={course._id} value={course._id}>
-                {course.title}
-              </option>
-            ))}
-          </select>
+            options={courses}
+            placeholder="Select a course"
+            displayKey="title"
+            valueKey="_id"
+            required={true}
+          />
         </div>
 
         <div>

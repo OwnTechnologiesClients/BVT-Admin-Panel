@@ -20,21 +20,27 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <script
           dangerouslySetInnerHTML={{
             __html: `
               // Force light theme only
               (function() {
-                localStorage.setItem('theme', 'light');
-                document.documentElement.classList.remove('dark');
+                try {
+                  if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+                    localStorage.setItem('theme', 'light');
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {
+                  // Ignore errors during SSR
+                }
               })();
             `,
           }}
         />
       </head>
-      <body className={`${outfit.className} bg-gray-50`}>
+      <body className={`${outfit.className} bg-gray-50`} suppressHydrationWarning>
         <AuthProvider>
           <ThemeProvider>
             <SidebarProvider>{children}</SidebarProvider>

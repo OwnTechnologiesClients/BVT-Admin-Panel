@@ -15,23 +15,29 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState("light");
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     // Force light theme only
     setTheme("light");
     setIsInitialized(true);
   }, []);
 
   useEffect(() => {
-    if (isInitialized) {
+    if (!isMounted || !isInitialized) return;
+
+    try {
       localStorage.setItem("theme", theme);
       if (theme === "dark") {
         document.documentElement.classList.add("dark");
       } else {
         document.documentElement.classList.remove("dark");
       }
+    } catch (e) {
+      // localStorage or document not available
     }
-  }, [theme, isInitialized]);
+  }, [theme, isInitialized, isMounted]);
 
   const toggleTheme = () => {
     // Keep theme as light only

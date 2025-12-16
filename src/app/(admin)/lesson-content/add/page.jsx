@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import RichTextEditor from "@/components/common/RichTextEditor";
-import { Button } from "@/components/ui";
+import { Button, SearchableSelect } from "@/components/ui";
 import { ArrowLeft, Save, Upload, Video, FileText, Loader2 } from "lucide-react";
 import * as lessonContentAPI from "@/lib/api/lessonContent";
 import * as courseAPI from "@/lib/api/course";
@@ -427,21 +427,18 @@ export default function AddLessonContentPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Course <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.courseId}
-                  onChange={(e) => handleInputChange("courseId", e.target.value)}
+                  onChange={(value) => handleInputChange("courseId", value)}
+                  options={courses}
+                  placeholder="Select a course"
+                  displayKey="title"
+                  valueKey="_id"
+                  required={true}
+                  loading={loading}
                   disabled={loading}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.courseId ? "border-red-500" : "border-gray-300"
-                  } ${loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                >
-                  <option value="">Select a course</option>
-                  {courses.map(course => (
-                    <option key={course._id} value={course._id}>
-                      {course.title}
-                    </option>
-                  ))}
-                </select>
+                  error={errors.courseId}
+                />
                 {errors.courseId && <p className="text-red-500 text-sm mt-1">{errors.courseId}</p>}
               </div>
 
@@ -449,23 +446,19 @@ export default function AddLessonContentPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Chapter <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.chapterId}
-                  onChange={(e) => handleInputChange("chapterId", e.target.value)}
+                  onChange={(value) => handleInputChange("chapterId", value)}
+                  options={chapters}
+                  placeholder={formData.courseId ? (loading ? "Loading chapters..." : "Select a chapter") : "Select a course first"}
+                  displayKey="title"
+                  valueKey="_id"
+                  required={true}
+                  loading={loading}
                   disabled={!formData.courseId || loading}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.chapterId ? "border-red-500" : "border-gray-300"
-                  } ${!formData.courseId || loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                >
-                  <option value="">
-                    {formData.courseId ? (loading ? "Loading chapters..." : "Select a chapter") : "Select a course first"}
-                  </option>
-                  {chapters.map(chapter => (
-                    <option key={chapter._id} value={chapter._id}>
-                      {chapter.title}
-                    </option>
-                  ))}
-                </select>
+                  error={errors.chapterId}
+                  emptyMessage={formData.courseId && chapters.length === 0 ? "No chapters available for this course" : "No options found"}
+                />
                 {errors.chapterId && <p className="text-red-500 text-sm mt-1">{errors.chapterId}</p>}
               </div>
 
@@ -473,23 +466,19 @@ export default function AddLessonContentPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Lesson <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.lessonId}
-                  onChange={(e) => handleInputChange("lessonId", e.target.value)}
+                  onChange={(value) => handleInputChange("lessonId", value)}
+                  options={lessons}
+                  placeholder={formData.chapterId ? (loading ? "Loading lessons..." : "Select a lesson") : "Select a chapter first"}
+                  displayKey="title"
+                  valueKey="_id"
+                  required={true}
+                  loading={loading}
                   disabled={!formData.chapterId || loading}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.lessonId ? "border-red-500" : "border-gray-300"
-                  } ${!formData.chapterId || loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                >
-                  <option value="">
-                    {formData.chapterId ? (loading ? "Loading lessons..." : "Select a lesson") : "Select a chapter first"}
-                  </option>
-                  {lessons.map(lesson => (
-                    <option key={lesson._id} value={lesson._id}>
-                      {lesson.title}
-                    </option>
-                  ))}
-                </select>
+                  error={errors.lessonId}
+                  emptyMessage={formData.chapterId && lessons.length === 0 ? "No lessons available for this chapter" : "No options found"}
+                />
                 {errors.lessonId && <p className="text-red-500 text-sm mt-1">{errors.lessonId}</p>}
               </div>
             </div>

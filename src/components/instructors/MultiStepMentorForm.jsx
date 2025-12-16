@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Button, Switch } from "@/components/ui";
+import { Button, Switch, SearchableSelect } from "@/components/ui";
 import { Plus, Trash2, Save, ArrowLeft, ArrowRight, Users, Award, Star, MapPin, Loader2, X } from "lucide-react";
 import * as userAPI from "@/lib/api/user";
 import * as instructorAPI from "@/lib/api/instructor";
@@ -88,21 +88,45 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
     const fetchInstructorUsers = async () => {
       try {
         setLoading(true);
-        const response = await userAPI.getAllUsers({ 
+        
+        // Fetch all users with instructor role
+        const usersResponse = await userAPI.getAllUsers({ 
           role: 'instructor',
           status: 1,
           limit: 100 
         });
-        if (response.success) {
-          setInstructorUsers(response.data || []);
+        
+        // Fetch all existing instructors to get their userIds
+        const instructorsResponse = await instructorAPI.getAllInstructors({ 
+          limit: 1000 // Get all instructors to check which users already have profiles
+        });
+        
+        let availableUsers = [];
+        if (usersResponse.success) {
+          availableUsers = usersResponse.data || [];
+        }
+        
+        // Get userIds of users who already have instructor profiles
+        let existingInstructorUserIds = [];
+        if (instructorsResponse.success && instructorsResponse.data) {
+          existingInstructorUserIds = instructorsResponse.data
+            .map(instructor => {
+              // Handle different response structures
+              const userId = instructor.userId?._id || instructor.userId;
+              return userId ? userId.toString() : null;
+            })
+            .filter(Boolean);
         }
 
-        // If editing, fetch instructor data
+        // If editing, fetch instructor data first to get current userId
+        let currentUserId = null;
         if (isEdit && initialData?.id) {
           const instructorResponse = await instructorAPI.getInstructorById(initialData.id);
           if (instructorResponse.success) {
             // Handle different response structures
             const instructor = instructorResponse.data?.instructor || instructorResponse.data?.data || instructorResponse.data;
+            currentUserId = (instructor.userId?._id || instructor.userId)?.toString();
+            
             setFormData({
               userId: instructor.userId?._id || instructor.userId || "",
               department: instructor.department || "",
@@ -183,6 +207,20 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
         } else if (initialData) {
           setFormData(prev => ({ ...prev, ...initialData }));
         }
+        
+        // Filter out users who already have instructor profiles
+        // When editing, keep the current user in the list (even though field is disabled)
+        const filteredUsers = availableUsers.filter(user => {
+          const userIdStr = user._id?.toString() || user.id?.toString();
+          // If editing and this is the current user, include them
+          if (isEdit && currentUserId && userIdStr === currentUserId) {
+            return true;
+          }
+          // Otherwise, exclude if they already have an instructor profile
+          return !existingInstructorUserIds.includes(userIdStr);
+        });
+        
+        setInstructorUsers(filteredUsers);
       } catch (err) {
         console.error('Error fetching data:', err);
       } finally {
@@ -556,30 +594,28 @@ const MultiStepMentorForm = ({ initialData = null, isEdit = false }) => {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select User (Instructor Role) <span className="text-red-500">*</span>
             </label>
-            <select
+            <SearchableSelect
               value={formData.userId}
-              onChange={(e) => {
-                handleInputChange("userId", e.target.value);
+              onChange={(value) => {
+                handleInputChange("userId", value);
                 // Clear image preview when user is changed (unless there's a file)
-                if (!e.target.value && !imageFile) {
+                if (!value && !imageFile) {
                   setImagePreview("");
                 }
               }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={loading || isEdit}
-            >
-              <option value="">{loading ? "Loading users..." : "Select a user with instructor role"}</option>
-              {instructorUsers.map(user => {
+              options={instructorUsers}
+              placeholder={loading ? "Loading users..." : "Select a user with instructor role"}
+              displayKey={(user) => {
                 const name = user.firstName && user.lastName 
                   ? `${user.firstName} ${user.lastName} (${user.username})`
                   : user.username;
-                return (
-                  <option key={user._id} value={user._id}>
-                    {name} - {user.email}
-                  </option>
-                );
-              })}
-            </select>
+                return `${name} - ${user.email}`;
+              }}
+              valueKey="_id"
+              required={true}
+              loading={loading}
+              disabled={loading || isEdit}
+            />
             {instructorUsers.length === 0 && !loading && (
               <p className="text-sm text-gray-500 mt-1">
                 No users with instructor role found. <Link href="/users/add" className="text-blue-600 hover:underline">Create a user with instructor role</Link> first.

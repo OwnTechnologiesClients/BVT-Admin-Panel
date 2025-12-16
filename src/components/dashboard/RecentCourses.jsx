@@ -32,14 +32,31 @@ export const RecentCourses = () => {
           setCourses(coursesList);
 
           // Fetch enrollments to get student counts per course
-          const enrollmentsResponse = await getAllEnrollments();
+          // Fetch all enrollments (no pagination limit to get accurate counts)
+          const enrollmentsResponse = await getAllEnrollments({ limit: 1000 });
           if (enrollmentsResponse.success) {
             const enrollments = enrollmentsResponse.data?.enrollments || enrollmentsResponse.data || [];
             
             // Count enrollments per course
             const counts = {};
             enrollments.forEach(enrollment => {
-              const courseId = enrollment.courseId?._id?.toString() || enrollment.courseId?.toString();
+              // Handle both populated and unpopulated courseId
+              let courseId = null;
+              if (enrollment.courseId) {
+                // If populated, courseId is an object with _id
+                if (enrollment.courseId._id) {
+                  courseId = enrollment.courseId._id.toString();
+                } 
+                // If not populated, courseId is just the ObjectId (Mongoose ObjectId)
+                else if (enrollment.courseId.toString && typeof enrollment.courseId.toString === 'function') {
+                  courseId = enrollment.courseId.toString();
+                }
+                // If it's already a string
+                else if (typeof enrollment.courseId === 'string') {
+                  courseId = enrollment.courseId;
+                }
+              }
+              
               if (courseId) {
                 counts[courseId] = (counts[courseId] || 0) + 1;
               }
@@ -161,8 +178,14 @@ export const RecentCourses = () => {
             </thead>
             <tbody>
               {courses.map((course) => {
-                const courseId = course._id?.toString() || course.id?.toString();
-                const studentCount = enrollmentCounts[courseId] || 0;
+                // Get course ID in a consistent format
+                let courseId = null;
+                if (course._id) {
+                  courseId = course._id.toString();
+                } else if (course.id) {
+                  courseId = course.id.toString();
+                }
+                const studentCount = courseId ? (enrollmentCounts[courseId] || 0) : 0;
                 
                 return (
                   <tr key={course._id || course.id} className="border-b border-gray-100">
