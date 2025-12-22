@@ -15,15 +15,33 @@ export default function EventDetailsPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [categoryName, setCategoryName] = useState(null);
+  const [eventTypeName, setEventTypeName] = useState(null);
 
   useEffect(() => {
     const fetchEvent = async () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await eventAPI.getEventById(id);
+        // Request populated names for details view
+        const response = await eventAPI.getEventById(id, true);
         if (response.success) {
-          setEventData(response.data);
+          const data = response.data;
+          setEventData(data);
+
+          // Extract category name from populated object
+          if (data.category) {
+            if (typeof data.category === 'object' && data.category !== null && data.category.name) {
+              setCategoryName(data.category.name);
+            }
+          }
+
+          // Extract eventType name from populated object
+          if (data.eventType) {
+            if (typeof data.eventType === 'object' && data.eventType !== null && data.eventType.name) {
+              setEventTypeName(data.eventType.name);
+            }
+          }
         } else {
           setError(response.message || 'Event not found');
         }
@@ -101,25 +119,16 @@ export default function EventDetailsPage({ params }) {
     );
   }
 
-  // Format event type - handle both object and string
-  const typeMap = {
-    'conference': 'Conference',
-    'workshop': 'Workshop',
-    'training': 'Training',
-    'seminar': 'Seminar',
-    'meeting': 'Meeting'
-  };
-  const getEventType = (eventType) => {
-    if (!eventType) return 'N/A';
-    if (typeof eventType === 'object' && eventType !== null) {
-      return eventType.name || 'N/A';
-    }
-    if (typeof eventType === 'string') {
-      return typeMap[eventType] || eventType || 'N/A';
+  // Get event type name - use fetched name if available, otherwise try to get from eventData
+  const getEventType = () => {
+    if (eventTypeName) return eventTypeName;
+    if (!eventData.eventType) return 'N/A';
+    if (typeof eventData.eventType === 'object' && eventData.eventType !== null) {
+      return eventData.eventType.name || 'N/A';
     }
     return 'N/A';
   };
-  const eventType = getEventType(eventData.eventType);
+  const eventType = getEventType();
 
   // Determine status based on dates
   let status = "Upcoming";
@@ -160,6 +169,19 @@ export default function EventDetailsPage({ params }) {
           Back to Events
         </Button>
         <div className="flex items-center gap-3">
+          <Button 
+            variant="primary" 
+            className="flex items-center gap-2"
+            onClick={() => router.push(`/events/details/${id}/registrations`)}
+          >
+            <Users className="w-4 h-4" />
+            View Registrations
+            {eventData?.attendees && eventData.attendees.length > 0 && (
+              <span className="bg-white text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">
+                {eventData.attendees.length}
+              </span>
+            )}
+          </Button>
           <Button 
             variant="outline" 
             className="flex items-center gap-2"
@@ -211,13 +233,13 @@ export default function EventDetailsPage({ params }) {
           <div className="flex flex-wrap gap-2">
             <Badge color="info">{eventType}</Badge>
             <Badge color="default">
-              {(() => {
+              {categoryName || (() => {
                 const category = eventData.category;
                 if (!category) return 'N/A';
                 if (typeof category === 'object' && category !== null) {
                   return category.name || 'N/A';
                 }
-                return String(category);
+                return 'N/A';
               })()}
             </Badge>
             <Badge color={status === "Upcoming" ? "info" : status === "Ongoing" ? "warning" : "success"}>
@@ -268,13 +290,13 @@ export default function EventDetailsPage({ params }) {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Attendees</label>
                   <p className="text-gray-900">
-                    {eventData.registeredAttendees || 0} / {eventData.maxAttendees}
+                    {(eventData.attendees && eventData.attendees.length) || 0} / {eventData.maxAttendees}
                   </p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                     <div 
                       className="bg-blue-600 h-2 rounded-full" 
                       style={{ 
-                        width: `${Math.min(((eventData.registeredAttendees || 0) / eventData.maxAttendees) * 100, 100)}%` 
+                        width: `${Math.min((((eventData.attendees && eventData.attendees.length) || 0) / eventData.maxAttendees) * 100, 100)}%` 
                       }}
                     ></div>
                   </div>
@@ -282,7 +304,7 @@ export default function EventDetailsPage({ params }) {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Capacity</label>
                   <p className="text-gray-900">
-                    {Math.round(((eventData.registeredAttendees || 0) / eventData.maxAttendees) * 100)}% filled
+                    {Math.round((((eventData.attendees && eventData.attendees.length) || 0) / eventData.maxAttendees) * 100)}% filled
                   </p>
                 </div>
               </>

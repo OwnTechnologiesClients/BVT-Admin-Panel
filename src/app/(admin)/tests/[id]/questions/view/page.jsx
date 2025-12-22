@@ -102,16 +102,42 @@ export default function ViewQuestionsPage({ params }) {
                 <div className="mb-3 text-gray-800 text-base">{q.question || 'No question text'}</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {Array.isArray(q.options) && q.options.length > 0 ? (
-                    q.options.map((option, oIdx) => (
-                      <div key={oIdx} className="flex items-center px-2 py-1 rounded bg-gray-50 border border-gray-200">
-                        <span className={`w-6 h-6 inline-flex items-center justify-center rounded-full mr-2 ${
-                          q.correctAnswer === oIdx ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-600'
-                        }`}>
-                          {q.correctAnswer === oIdx ? <CheckCircle className="w-4 h-4" /> : String.fromCharCode(65 + oIdx)}
-                        </span>
-                        <span className={q.correctAnswer === oIdx ? 'font-bold text-green-700' : ''}>{option}</span>
-                      </div>
-                    ))
+                    q.options.map((option, oIdx) => {
+                      // Handle both old format (strings) and new format (objects with type/value)
+                      const optionValue = typeof option === 'object' && option !== null && option.type && option.value !== undefined
+                        ? option.value
+                        : option;
+                      const optionType = typeof option === 'object' && option !== null && option.type
+                        ? option.type
+                        : 'text';
+                      
+                      return (
+                        <div key={oIdx} className="flex items-center px-2 py-1 rounded bg-gray-50 border border-gray-200">
+                          <span className={`w-6 h-6 inline-flex items-center justify-center rounded-full mr-2 ${
+                            q.correctAnswer === oIdx ? 'bg-green-100 text-green-600' : 'bg-gray-200 text-gray-600'
+                          }`}>
+                            {q.correctAnswer === oIdx ? <CheckCircle className="w-4 h-4" /> : String.fromCharCode(65 + oIdx)}
+                          </span>
+                          {optionType === 'image' ? (
+                            <div className="flex-1">
+                              {optionValue ? (
+                                <img
+                                  src={typeof optionValue === 'string' ? optionValue : URL.createObjectURL(optionValue)}
+                                  alt={`Option ${String.fromCharCode(65 + oIdx)}`}
+                                  className="max-w-full h-20 object-contain rounded border border-gray-300 bg-white"
+                                />
+                              ) : (
+                                <span className="text-gray-500 text-sm">No image</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className={q.correctAnswer === oIdx ? 'font-bold text-green-700' : 'text-gray-800'}>
+                              {optionValue || 'Empty option'}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <div className="text-gray-500 text-sm">No options available</div>
                   )}
@@ -147,3 +173,4 @@ export default function ViewQuestionsPage({ params }) {
     </div>
   );
 }
+

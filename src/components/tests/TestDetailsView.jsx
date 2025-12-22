@@ -23,7 +23,8 @@ import {
 } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import * as enrollmentAPI from "@/lib/api/enrollment";
-import { showSuccess, showError } from "@/lib/utils/sweetalert";
+import { showSuccess, showError, showConfirm } from "@/lib/utils/sweetalert";
+import { RefreshCw } from "lucide-react";
 
 const defaultStudents = [
   {
@@ -169,6 +170,7 @@ const TestDetailsView = ({
   const [selectedStudentAttempt, setSelectedStudentAttempt] = useState(null);
   const [isAttemptModalOpen, setIsAttemptModalOpen] = useState(false);
   const [updatingResults, setUpdatingResults] = useState(false);
+  const [togglingRetake, setTogglingRetake] = useState(null); // studentId being toggled
 
   useEffect(() => {
     const fetchTest = async () => {
@@ -424,6 +426,58 @@ const TestDetailsView = ({
         attempt: student.testCompletion
       });
       setIsAttemptModalOpen(true);
+    }
+  };
+
+  const handleToggleRetake = async (student) => {
+    const isCurrentlyAllowed = student.testCompletion?.retakeAllowed || false;
+    const action = isCurrentlyAllowed ? 'revoke' : 'allow';
+    
+    const confirmed = await showConfirm(
+      `${action === 'allow' ? 'Allow' : 'Revoke'} Retake?`,
+      `Are you sure you want to ${action} retake for ${student.name}?`,
+      action === 'allow' ? 'Yes, Allow' : 'Yes, Revoke'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setTogglingRetake(student.id);
+      
+      const response = await testAPI.toggleStudentRetake(
+        testId,
+        student.id,
+        !isCurrentlyAllowed,
+        `Admin ${action}ed retake`
+      );
+      
+      if (response.success) {
+        // Update local state
+        setStudents(prev => prev.map(s => {
+          if (s.id === student.id && s.testCompletion) {
+            return {
+              ...s,
+              testCompletion: {
+                ...s.testCompletion,
+                retakeAllowed: !isCurrentlyAllowed
+              }
+            };
+          }
+          return s;
+        }));
+        
+        showSuccess(
+          'Success',
+          `Retake ${action === 'allow' ? 'allowed' : 'revoked'} for ${student.name}`
+        );
+      } else {
+        showError('Error', response.message || `Failed to ${action} retake`);
+      }
+    } catch (err) {
+      console.error('Error toggling retake:', err);
+      showError('Error', `Failed to ${action} retake`);
+    } finally {
+      setTogglingRetake(null);
     }
   };
 
@@ -933,7 +987,9 @@ const TestDetailsView = ({
                     )}
                   </td>
                   <td className="px-4 py-4">
+                    <div className="flex items-center gap-2">
                     {student.status === "completed" && student.testCompletion ? (
+                        <>
                       <button
                         onClick={() => handleViewAttempt(student)}
                         className="flex items-center gap-1 text-blue-600 hover:text-blue-800 transition-colors"
@@ -942,9 +998,28 @@ const TestDetailsView = ({
                         <Eye className="h-4 w-4" />
                         <span className="text-sm">View</span>
                       </button>
+                          <button
+                            onClick={() => handleToggleRetake(student)}
+                            disabled={togglingRetake === student.id}
+                            className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                              student.testCompletion?.retakeAllowed
+                                ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                                : 'bg-green-100 text-green-700 hover:bg-green-200'
+                            } ${togglingRetake === student.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={student.testCompletion?.retakeAllowed ? 'Revoke retake permission' : 'Allow student to retake'}
+                          >
+                            {togglingRetake === student.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3 w-3" />
+                            )}
+                            <span>{student.testCompletion?.retakeAllowed ? 'Revoke' : 'Allow'} Retake</span>
+                          </button>
+                        </>
                     ) : (
                       <span className="text-sm text-gray-400">-</span>
                     )}
+                    </div>
                   </td>
                 </tr>
               ))}

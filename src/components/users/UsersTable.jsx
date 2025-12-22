@@ -32,9 +32,11 @@ const UsersTable = () => {
   const hasInitialFetch = useRef(false);
 
   // Fetch users with server-side pagination (Oasis pattern)
-  const fetchUsers = useCallback(async (page, limit, search, role, status) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchUsers = useCallback(async (page, limit, search, role, status, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
       
       const params = {
@@ -65,7 +67,7 @@ const UsersTable = () => {
       setError(errorMsg);
       showError('Error Loading Users', errorMsg);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
@@ -100,36 +102,26 @@ const UsersTable = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchUsers(1, pagination.limit, searchTerm, roleFilter, statusFilter);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchUsers, pagination.limit, roleFilter, statusFilter]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
     fetchUsers(1, pagination.limit, searchTerm, roleFilter, statusFilter);
+  }, [fetchUsers, pagination.limit, searchTerm, roleFilter, statusFilter]);
+
+  // Handle filter changes - trigger API call immediately (not search)
+  const prevFiltersRef = useRef({ roleFilter, statusFilter });
+  useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
+    // Only trigger if filters actually changed (not search)
+    if (prevFiltersRef.current.roleFilter !== roleFilter || 
+        prevFiltersRef.current.statusFilter !== statusFilter) {
+      prevFiltersRef.current = { roleFilter, statusFilter };
+      fetchUsers(1, pagination.limit, searchTerm, roleFilter, statusFilter);
+    }
   }, [roleFilter, statusFilter, fetchUsers, pagination.limit, searchTerm]);
 
   // Handle page change
@@ -379,6 +371,11 @@ const UsersTable = () => {
                 placeholder="Search users by name, email, or username..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

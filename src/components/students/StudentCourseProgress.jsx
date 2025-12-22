@@ -35,10 +35,19 @@ const StudentCourseProgress = ({ student, course, enrollment, structure, progres
   const totalLessons = progressDetails.totalLessons || 0;
   const testsCompleted = progressDetails.testsCompleted || 0;
   const totalTests = progressDetails.totalTests || 0;
-  const overallProgress = progressDetails.overallProgress || course.progress || 0;
+  
+  // If course is completed, show 100% progress
+  const overallProgress = course.status === 'Completed' 
+    ? 100 
+    : (progressDetails.overallProgress || course.progress || 0);
 
-  const chaptersRemaining = Math.max(totalChapters - chaptersCompleted, 0);
-  const lessonsRemaining = Math.max(totalLessons - lessonsCompleted, 0);
+  // Calculate remaining - if course is completed, show 0 remaining
+  const chaptersRemaining = course.status === 'Completed' 
+    ? 0 
+    : Math.max(totalChapters - chaptersCompleted, 0);
+  const lessonsRemaining = course.status === 'Completed'
+    ? 0
+    : Math.max(totalLessons - lessonsCompleted, 0);
 
   const toggleChapter = (chapterId) => {
     setExpandedChapters(prev => ({

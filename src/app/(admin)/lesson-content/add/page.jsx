@@ -22,10 +22,12 @@ export default function AddLessonContentPage() {
     title: "",
     description: "",
     video: {
+      type: "upload", // "upload" or "youtube"
       file: null,
       filePath: "",
       fileName: "",
-      duration: ""
+      duration: "",
+      youtubeUrl: ""
     },
     document: {
       file: null,
@@ -304,8 +306,21 @@ export default function AddLessonContentPage() {
     }
 
     // Video is always required (Step 1)
+    // Validate video based on type
+    if (formData.video.type === "upload") {
     if (!formData.video.file && !formData.video.filePath) {
       newErrors.videoFile = "Video file is required";
+      }
+    } else if (formData.video.type === "youtube") {
+      if (!formData.video.youtubeUrl || !formData.video.youtubeUrl.trim()) {
+        newErrors.youtubeUrl = "YouTube URL is required";
+      } else {
+        // Validate YouTube URL format
+        const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+        if (!youtubeRegex.test(formData.video.youtubeUrl.trim())) {
+          newErrors.youtubeUrl = "Please enter a valid YouTube URL";
+        }
+      }
     }
 
     // Document is always required (Step 2)
@@ -330,7 +345,7 @@ export default function AddLessonContentPage() {
       setSubmitting(true);
 
       // Check if there are file uploads
-      const hasVideoFile = formData.video.file && formData.video.file instanceof File;
+      const hasVideoFile = formData.video.type === "upload" && formData.video.file && formData.video.file instanceof File;
       const hasDocumentFile = formData.document.file && formData.document.file instanceof File;
       const hasFileUploads = hasVideoFile || hasDocumentFile;
 
@@ -348,12 +363,15 @@ export default function AddLessonContentPage() {
         }
         contentData.append('isActive', formData.isActive);
 
-        // Append video file if it's a File
-        if (hasVideoFile) {
+        // Append video data
+        contentData.append('videoType', formData.video.type);
+        if (formData.video.type === "upload" && hasVideoFile) {
           contentData.append('video', formData.video.file);
           if (formData.video.duration) {
             contentData.append('videoDuration', parseInt(formData.video.duration));
           }
+        } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
+          contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
         }
 
         // Append document file if it's a File
@@ -375,7 +393,11 @@ export default function AddLessonContentPage() {
           title: formData.title.trim(),
           description: formData.description?.trim() || "",
           isActive: formData.isActive,
-          video: null,
+          video: {
+            type: formData.video.type,
+            ...(formData.video.type === "youtube" && formData.video.youtubeUrl ? { youtubeUrl: formData.video.youtubeUrl.trim() } : {}),
+            ...(formData.video.type === "upload" && formData.video.filePath ? { filePath: formData.video.filePath } : {})
+          },
           document: null
         };
       }
@@ -561,6 +583,33 @@ export default function AddLessonContentPage() {
                   <h3 className="text-lg font-semibold text-gray-900">Video Content</h3>
                 </div>
                 
+                {/* Video Type Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Video Source <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.video.type || "upload"}
+                    onChange={(e) => {
+                      handleVideoChange("type", e.target.value);
+                      // Clear the other type's data
+                      if (e.target.value === "upload") {
+                        handleVideoChange("youtubeUrl", "");
+                      } else {
+                        handleVideoChange("file", null);
+                        handleVideoChange("fileName", "");
+                        handleVideoChange("filePath", "");
+                        handleVideoChange("duration", "");
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="upload">Upload Video File</option>
+                    <option value="youtube">YouTube URL</option>
+                  </select>
+                </div>
+
+                {formData.video.type === "upload" ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -614,13 +663,33 @@ export default function AddLessonContentPage() {
                     </label>
                     <input
                       type="number"
-                      value={formData.video.duration}
+                        value={formData.video.duration || ""}
                       readOnly
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
                       placeholder="Will be calculated from video"
                     />
                   </div>
                 </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      YouTube URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.video.youtubeUrl || ""}
+                      onChange={(e) => handleVideoChange("youtubeUrl", e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.youtubeUrl ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter the full YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
+                    </p>
+                    {errors.youtubeUrl && <p className="text-red-500 text-sm mt-1">{errors.youtubeUrl}</p>}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-3 mt-6">
                   <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>

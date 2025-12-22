@@ -194,6 +194,68 @@ export default function ViewLessonContentPage({ params }) {
               <h2 className="text-xl font-semibold text-gray-900">Video Content</h2>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              {content.video.type === 'youtube' && content.video.youtubeUrl ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Video className="w-8 h-8 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-gray-900">YouTube Video</p>
+                        <p className="text-sm text-gray-600">Type: YouTube URL</p>
+                      </div>
+                    </div>
+                    <a
+                      href={content.video.youtubeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open on YouTube
+                    </a>
+                  </div>
+                  <div className="mt-4">
+                    {/* Extract YouTube video ID and create embed URL */}
+                    {(() => {
+                      const getYouTubeVideoId = (url) => {
+                        if (!url) return null;
+                        const patterns = [
+                          /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+                          /youtube\.com\/.*[?&]v=([^&\n?#]+)/
+                        ];
+                        for (const pattern of patterns) {
+                          const match = url.match(pattern);
+                          if (match && match[1]) {
+                            return match[1];
+                          }
+                        }
+                        return null;
+                      };
+                      const videoId = getYouTubeVideoId(content.video.youtubeUrl);
+                      const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1` : null;
+                      
+                      return embedUrl ? (
+                        <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-300">
+                          <iframe
+                            src={embedUrl}
+                            className="w-full h-full"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            title="YouTube video player"
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-yellow-800 text-sm">Invalid YouTube URL format</p>
+                          <p className="text-yellow-700 text-xs mt-1">{content.video.youtubeUrl}</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Video className="w-8 h-8 text-blue-600" />
@@ -236,6 +298,8 @@ export default function ViewLessonContentPage({ params }) {
                     Your browser does not support the video tag.
                   </video>
                 </div>
+                  )}
+                </>
               )}
             </div>
           </div>

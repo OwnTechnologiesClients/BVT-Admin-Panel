@@ -25,9 +25,11 @@ const EventsTable = () => {
   const hasInitialFetch = useRef(false);
 
   // Fetch events with server-side pagination (Oasis pattern)
-  const fetchEvents = useCallback(async (page, limit, search, status, type) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchEvents = useCallback(async (page, limit, search, status, type, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
       
       const params = {
@@ -58,7 +60,7 @@ const EventsTable = () => {
       setError(errorMsg);
       showError('Error Loading Events', errorMsg);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
@@ -75,36 +77,26 @@ const EventsTable = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchEvents(1, pagination.limit, searchTerm, statusFilter, typeFilter);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchEvents, pagination.limit, statusFilter, typeFilter]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
     fetchEvents(1, pagination.limit, searchTerm, statusFilter, typeFilter);
+  }, [fetchEvents, pagination.limit, searchTerm, statusFilter, typeFilter]);
+
+  // Handle filter changes - trigger API call immediately (not search)
+  const prevFiltersRef = useRef({ statusFilter, typeFilter });
+  useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
+    // Only trigger if filters actually changed (not search)
+    if (prevFiltersRef.current.statusFilter !== statusFilter || 
+        prevFiltersRef.current.typeFilter !== typeFilter) {
+      prevFiltersRef.current = { statusFilter, typeFilter };
+      fetchEvents(1, pagination.limit, searchTerm, statusFilter, typeFilter);
+    }
   }, [statusFilter, typeFilter, fetchEvents, pagination.limit, searchTerm]);
 
   // Handle page change
@@ -431,6 +423,11 @@ const EventsTable = () => {
                 placeholder="Search events by title, organizer, or location..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

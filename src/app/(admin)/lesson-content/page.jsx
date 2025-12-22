@@ -26,9 +26,11 @@ export default function LessonContentPage() {
   const hasInitialFetch = useRef(false);
 
   // Fetch lesson contents with server-side pagination (Oasis pattern)
-  const fetchLessonContents = useCallback(async (page, limit, search, contentType) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchLessonContents = useCallback(async (page, limit, search, contentType, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
       
       const params = {
@@ -58,7 +60,7 @@ export default function LessonContentPage() {
       console.error('Error fetching lesson contents:', err);
       setError(err.message || 'Failed to fetch lesson contents');
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
@@ -75,36 +77,25 @@ export default function LessonContentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchLessonContents(1, pagination.limit, searchTerm, filterType);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchLessonContents, pagination.limit, filterType]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
     fetchLessonContents(1, pagination.limit, searchTerm, filterType);
+  }, [fetchLessonContents, pagination.limit, searchTerm, filterType]);
+
+  // Handle filter changes - trigger API call immediately (not search)
+  const prevFiltersRef = useRef({ filterType });
+  useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
+    // Only trigger if filters actually changed (not search)
+    if (prevFiltersRef.current.filterType !== filterType) {
+      prevFiltersRef.current = { filterType };
+      fetchLessonContents(1, pagination.limit, searchTerm, filterType);
+    }
   }, [filterType, fetchLessonContents, pagination.limit, searchTerm]);
 
   // Handle page change
@@ -254,6 +245,11 @@ export default function LessonContentPage() {
               placeholder="Search content..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>

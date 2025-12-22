@@ -31,9 +31,11 @@ export default function ChaptersPage() {
   const hasInitialFetch = useRef(false);
 
   // Fetch chapters with server-side pagination (Oasis pattern)
-  const fetchChapters = useCallback(async (page, limit, search, courseId) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchChapters = useCallback(async (page, limit, search, courseId, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
       
       const params = {
@@ -63,7 +65,7 @@ export default function ChaptersPage() {
       setError(errorMsg);
       showError('Error Loading Chapters', errorMsg);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
@@ -120,36 +122,25 @@ export default function ChaptersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchChapters(1, pagination.limit, searchTerm, filterCourse);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchChapters, pagination.limit, filterCourse]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
     fetchChapters(1, pagination.limit, searchTerm, filterCourse);
+  }, [fetchChapters, pagination.limit, searchTerm, filterCourse]);
+
+  // Handle filter changes - trigger API call immediately (not search)
+  const prevFiltersRef = useRef({ filterCourse });
+  useEffect(() => {
+    // Skip on initial mount - initial fetch already handles this
+    if (isInitialMount.current) {
+      return;
+    }
+
+    // Only trigger if filters actually changed (not search)
+    if (prevFiltersRef.current.filterCourse !== filterCourse) {
+      prevFiltersRef.current = { filterCourse };
+      fetchChapters(1, pagination.limit, searchTerm, filterCourse);
+    }
   }, [filterCourse, fetchChapters, pagination.limit, searchTerm]);
 
   // Handle page change
@@ -254,6 +245,11 @@ export default function ChaptersPage() {
               placeholder="Search chapters..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleSearch();
+                }
+              }}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>

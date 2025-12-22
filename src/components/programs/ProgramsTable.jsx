@@ -23,9 +23,11 @@ const ProgramsTable = () => {
   });
 
   // Fetch programs with server-side pagination (Oasis pattern)
-  const fetchPrograms = useCallback(async (page, limit, search, category) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchPrograms = useCallback(async (page, limit, search, category, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
       
       const params = {
@@ -53,36 +55,43 @@ const ProgramsTable = () => {
       console.error('Error fetching programs:', err);
       setError(err.message || 'Failed to fetch programs');
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
   // Initial fetch
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
+  
   useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
     fetchPrograms(1, 10, "", "");
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
   }, [fetchPrograms]);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
+    fetchPrograms(1, pagination.limit, searchTerm, filterCategory);
+  }, [fetchPrograms, pagination.limit, searchTerm, filterCategory]);
+
+  // Handle filter changes - trigger API call immediately (not search)
+  const prevFiltersRef = useRef({ filterCategory });
   useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      return;
     }
     
-    searchTimeoutRef.current = setTimeout(() => {
+    // Only trigger if filters actually changed (not search)
+    if (prevFiltersRef.current.filterCategory !== filterCategory) {
+      prevFiltersRef.current = { filterCategory };
       fetchPrograms(1, pagination.limit, searchTerm, filterCategory);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchPrograms, pagination.limit, filterCategory]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    fetchPrograms(1, pagination.limit, searchTerm, filterCategory);
+    }
   }, [filterCategory, fetchPrograms, pagination.limit, searchTerm]);
 
   // Handle page change
@@ -252,6 +261,11 @@ const ProgramsTable = () => {
                 placeholder="Search programs by title or director..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>

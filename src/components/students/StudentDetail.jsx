@@ -69,6 +69,39 @@ const StudentDetail = ({ student }) => {
           // Transform enrollments to course format for display
           const coursesList = enrollmentsList.map((enrollment) => {
             const course = enrollment.courseId;
+            
+            // Helper to check if a value is an ObjectId (24 char hex string)
+            const isObjectId = (val) => {
+              if (typeof val !== 'string') return false;
+              return /^[0-9a-fA-F]{24}$/.test(val);
+            };
+            
+            // Get category name - avoid showing ObjectIds
+            let categoryName = 'General';
+            if (course.category) {
+              if (typeof course.category === 'string') {
+                categoryName = isObjectId(course.category) ? 'General' : course.category;
+              } else if (typeof course.category === 'object' && course.category.name) {
+                categoryName = course.category.name;
+              }
+            }
+            
+            // Get instructor name - avoid showing ObjectIds
+            let instructorName = 'TBA';
+            if (course.instructor) {
+              if (typeof course.instructor === 'string') {
+                instructorName = isObjectId(course.instructor) ? 'TBA' : course.instructor;
+              } else if (typeof course.instructor === 'object') {
+                if (course.instructor.userId?.firstName && course.instructor.userId?.lastName) {
+                  instructorName = `${course.instructor.userId.firstName} ${course.instructor.userId.lastName}`;
+                } else if (course.instructor.userId?.email) {
+                  instructorName = course.instructor.userId.email;
+                } else if (course.instructor.name) {
+                  instructorName = course.instructor.name;
+                }
+              }
+            }
+            
             return {
               _id: enrollment._id,
               enrollmentId: enrollment._id,
@@ -76,12 +109,8 @@ const StudentDetail = ({ student }) => {
               courseId: course._id || course.id,
               slug: course.slug, // Include slug for URL navigation
               title: course.title || course.name,
-              category: typeof course.category === 'object' ? course.category?.name : course.category || 'General',
-              instructor: typeof course.instructor === 'object' 
-                ? (course.instructor?.userId?.firstName && course.instructor?.userId?.lastName
-                  ? `${course.instructor.userId.firstName} ${course.instructor.userId.lastName}`
-                  : course.instructor?.userId?.email || 'TBA')
-                : course.instructor || 'TBA',
+              category: categoryName,
+              instructor: instructorName,
               enrollmentDate: new Date(enrollment.enrolledAt).toISOString().slice(0, 10),
               status: enrollment.status === 'active' ? 'In Progress' : enrollment.status === 'completed' ? 'Completed' : enrollment.status,
               progress: enrollment.progress || 0,
@@ -466,7 +495,7 @@ const StudentDetail = ({ student }) => {
                       {course.title || course.name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {typeof course.category === 'string' ? course.category : course.category?.name || 'General'} • {typeof course.instructor === 'string' ? course.instructor : course.instructor?.fullName || 'TBA'}
+                      {course.category || 'General'} • {course.instructor || 'TBA'}
                     </p>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                       <span>

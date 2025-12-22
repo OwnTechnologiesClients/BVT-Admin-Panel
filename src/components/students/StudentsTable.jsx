@@ -23,9 +23,11 @@ const StudentsTable = () => {
   const hasInitialFetch = useRef(false);
 
   // Fetch students with server-side pagination (Oasis pattern)
-  const fetchStudents = useCallback(async (page, limit, search) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchStudents = useCallback(async (page, limit, search, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
       
       const params = {
@@ -59,7 +61,7 @@ const StudentsTable = () => {
       console.error("Error fetching students:", err);
       showError('Error Loading Students', errorMsg);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
@@ -76,35 +78,9 @@ const StudentsTable = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
-
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
-    }
-    
-    searchTimeoutRef.current = setTimeout(() => {
-      fetchStudents(1, pagination.limit, searchTerm);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchStudents, pagination.limit]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
     fetchStudents(1, pagination.limit, searchTerm);
   }, [fetchStudents, pagination.limit, searchTerm]);
 
@@ -310,6 +286,11 @@ const StudentsTable = () => {
                 placeholder="Search students by name or email..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

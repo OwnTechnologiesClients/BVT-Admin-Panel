@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Save, Trash2, Upload, Plus, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Upload, Plus, Loader2, X } from "lucide-react";
 import * as testAPI from "@/lib/api/test";
 import { Button } from "@/components/ui";
 import { showSuccess, showError } from "@/lib/utils/sweetalert";
@@ -24,26 +24,61 @@ export default function EditQuestionsPage({ params }) {
           const test = response.data;
           const questionsData = test.questions || [];
           
+          // Process options - handle both old format (strings) and new format (objects)
+          const processOptions = (options) => {
+            if (!Array.isArray(options)) return [
+              { type: "text", value: "" },
+              { type: "text", value: "" },
+              { type: "text", value: "" },
+              { type: "text", value: "" }
+            ];
+            
+            // If it's old format (strings), convert to new format
+            if (options.length > 0 && typeof options[0] === 'string') {
+              return options.map(opt => ({ type: "text", value: opt || "" }));
+            }
+            
+            // If it's new format, ensure all have type and value
+            return options.map(opt => {
+              if (typeof opt === 'object' && opt !== null && opt.type && opt.value !== undefined) {
+                return opt;
+              }
+              return { type: "text", value: opt || "" };
+            });
+          };
+
           // If no questions, add one empty question
           if (questionsData.length === 0) {
             setQuestions([{
               id: Date.now(),
               question: "",
-              options: ["", "", "", ""],
+              options: [
+                { type: "text", value: "" },
+                { type: "text", value: "" },
+                { type: "text", value: "" },
+                { type: "text", value: "" }
+              ],
               correctAnswer: 0,
               points: 1,
               image: null
             }]);
           } else {
             // Map questions to editable format
-            setQuestions(questionsData.map((q, idx) => ({
-              id: q._id || q.id || idx,
-              question: q.question || "",
-              options: q.options || ["", "", "", ""],
-              correctAnswer: q.correctAnswer !== undefined ? q.correctAnswer : 0,
-              points: q.points || 1,
-              image: q.image || null
-            })));
+            setQuestions(questionsData.map((q, idx) => {
+              const processedOptions = processOptions(q.options);
+              // Ensure we have at least 4 options
+              while (processedOptions.length < 4) {
+                processedOptions.push({ type: "text", value: "" });
+              }
+              return {
+                id: q._id || q.id || idx,
+                question: q.question || "",
+                options: processedOptions,
+                correctAnswer: q.correctAnswer !== undefined ? q.correctAnswer : 0,
+                points: q.points || 1,
+                image: q.image || null
+              };
+            }));
           }
         } else {
           setError(response.message || 'Failed to fetch questions');
@@ -67,12 +102,45 @@ export default function EditQuestionsPage({ params }) {
     setQuestions(updated);
   };
 
-  const handleOptionChange = (qIndex, oIdx, value) => {
+  const handleOptionChange = (qIndex, oIdx, field, value) => {
     const updated = [...questions];
     if (!updated[qIndex].options) {
-      updated[qIndex].options = ["", "", "", ""];
+      updated[qIndex].options = [
+        { type: "text", value: "" },
+        { type: "text", value: "" },
+        { type: "text", value: "" },
+        { type: "text", value: "" }
+      ];
     }
-    updated[qIndex].options[oIdx] = value;
+    if (field === 'type' || field === 'value') {
+      if (!updated[qIndex].options[oIdx] || typeof updated[qIndex].options[oIdx] !== 'object') {
+        updated[qIndex].options[oIdx] = { type: 'text', value: '' };
+      }
+      updated[qIndex].options[oIdx][field] = value;
+      // When changing type, reset value if needed
+      if (field === 'type') {
+        if (value === 'text') {
+          updated[qIndex].options[oIdx].value = '';
+        } else if (value === 'image') {
+          updated[qIndex].options[oIdx].value = null;
+        }
+      }
+    } else {
+      // Backward compatibility - if value is passed directly
+      updated[qIndex].options[oIdx] = value;
+    }
+    setQuestions(updated);
+  };
+
+  const handleOptionImageChange = (qIndex, oIdx, file) => {
+    const updated = [...questions];
+    if (!updated[qIndex].options[oIdx] || typeof updated[qIndex].options[oIdx] !== 'object') {
+      updated[qIndex].options[oIdx] = { type: 'image', value: null };
+    }
+    updated[qIndex].options[oIdx] = {
+      type: "image",
+      value: file || null
+    };
     setQuestions(updated);
   };
 
@@ -94,7 +162,12 @@ export default function EditQuestionsPage({ params }) {
     setQuestions([...questions, {
       id: Date.now(),
       question: "",
-      options: ["", "", "", ""],
+      options: [
+        { type: "text", value: "" },
+        { type: "text", value: "" },
+        { type: "text", value: "" },
+        { type: "text", value: "" }
+      ],
       correctAnswer: 0,
       points: 1,
       image: null
@@ -105,15 +178,66 @@ export default function EditQuestionsPage({ params }) {
     try {
       setSaving(true);
       
-      // Check if there are any file uploads
-      const hasFileUploads = questions.some(q => q.image && q.image instanceof File);
+      // Check if there are any file uploads (question images or option images)
+      const hasFileUploads = questions.some(q => 
+        (q.image && q.image instanceof File) ||
+        q.options.some(opt => opt && typeof opt === 'object' && opt.type === 'image' && opt.value instanceof File)
+      );
       
       // Prepare questions data for API
       const questionsData = questions.map((q, idx) => {
+        // Process options - filter out empty ones and convert to proper format
+        const processedOptions = q.options
+          .filter(opt => {
+            if (typeof opt === 'object' && opt !== null && opt.type) {
+              if (opt.type === 'image') {
+                return opt.value !== null && opt.value !== undefined && opt.value !== '' && 
+                       (opt.value instanceof File || (typeof opt.value === 'string' && opt.value.trim() !== ''));
+              }
+              if (opt.type === 'text') {
+                return opt.value !== null && opt.value !== undefined && opt.value !== '' && 
+                       typeof opt.value === 'string' && opt.value.trim() !== '';
+              }
+            }
+            return false;
+          })
+          .map(opt => {
+            if (typeof opt === 'object' && opt !== null && opt.type) {
+              if (opt.type === 'image' && opt.value instanceof File) {
+                return { type: 'image', value: '' }; // Placeholder, file will be in FormData
+              }
+              return opt;
+            }
+            return { type: 'text', value: opt };
+          });
+
+        // Adjust correctAnswer index based on filtered options
+        let adjustedCorrectAnswer = q.correctAnswer;
+        if (q.correctAnswer !== null && q.correctAnswer !== undefined) {
+          let validBeforeCorrect = 0;
+          for (let i = 0; i < q.correctAnswer && i < q.options.length; i++) {
+            const opt = q.options[i];
+            if (typeof opt === 'object' && opt !== null && opt.type) {
+              if (opt.type === 'image') {
+                if (opt.value !== null && opt.value !== undefined && opt.value !== '' && 
+                    (opt.value instanceof File || (typeof opt.value === 'string' && opt.value.trim() !== ''))) {
+                  validBeforeCorrect++;
+                }
+              } else if (opt.type === 'text') {
+                if (opt.value !== null && opt.value !== undefined && opt.value !== '' && 
+                    typeof opt.value === 'string' && opt.value.trim() !== '') {
+                  validBeforeCorrect++;
+                }
+              }
+            }
+          }
+          adjustedCorrectAnswer = validBeforeCorrect;
+        }
+
         const questionData = {
           question: q.question.trim(),
-          options: q.options.filter(opt => opt.trim() !== ""),
-          correctAnswer: q.correctAnswer,
+          options: processedOptions,
+          correctAnswer: adjustedCorrectAnswer,
           points: q.points || 1
         };
         
@@ -161,11 +285,36 @@ export default function EditQuestionsPage({ params }) {
           image: questions[idx].image instanceof File ? undefined : q.image
         }))));
         
-        // Append image files
-        questions.forEach((q, idx) => {
+        // Append question image files
+        questions.forEach((q, qIndex) => {
           if (q.image && q.image instanceof File) {
-            formData.append(`questionImage_${idx}`, q.image);
+            formData.append(`questionImage[${qIndex}]`, q.image);
           }
+          
+          // Append option image files - need to map to processed option indices
+          q.options.forEach((opt, optIndex) => {
+            if (opt && typeof opt === 'object' && opt.type === 'image' && opt.value instanceof File) {
+              // Calculate the processed index
+              let processedIndex = 0;
+              for (let i = 0; i < optIndex; i++) {
+                const prevOpt = q.options[i];
+                if (typeof prevOpt === 'object' && prevOpt !== null && prevOpt.type) {
+                  if (prevOpt.type === 'image') {
+                    if (prevOpt.value !== null && prevOpt.value !== undefined && prevOpt.value !== '' && 
+                        (prevOpt.value instanceof File || (typeof prevOpt.value === 'string' && prevOpt.value.trim() !== ''))) {
+                      processedIndex++;
+                    }
+                  } else if (prevOpt.type === 'text') {
+                    if (prevOpt.value !== null && prevOpt.value !== undefined && prevOpt.value !== '' && 
+                        typeof prevOpt.value === 'string' && prevOpt.value.trim() !== '') {
+                      processedIndex++;
+                    }
+                  }
+                }
+              }
+              formData.append(`optionImage[${qIndex}][${processedIndex}]`, opt.value);
+            }
+          });
         });
         
         response = await testAPI.updateTest(testId, formData);
@@ -318,27 +467,103 @@ export default function EditQuestionsPage({ params }) {
                 Options <span className="text-red-500">*</span>
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {(q.options || ["", "", "", ""]).map((option, oIdx) => (
-                  <div key={oIdx} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name={`correct-${q.id || qIndex}`}
-                      checked={q.correctAnswer === oIdx}
-                      onChange={() => handleChange(qIndex, 'correctAnswer', oIdx)}
-                      className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                    />
-                    <input
-                      className="flex-1 px-2 py-1 border rounded focus:ring-2 focus:ring-blue-500"
-                      value={option}
-                      onChange={e => handleOptionChange(qIndex, oIdx, e.target.value)}
-                      required
-                      placeholder={`Option ${String.fromCharCode(65 + oIdx)}`}
-                    />
-                    {q.correctAnswer === oIdx && (
-                      <span className="text-xs text-green-600 font-medium">Correct</span>
-                    )}
-                  </div>
-                ))}
+                {(q.options || [
+                  { type: "text", value: "" },
+                  { type: "text", value: "" },
+                  { type: "text", value: "" },
+                  { type: "text", value: "" }
+                ]).map((option, oIdx) => {
+                  const optionValue = typeof option === 'object' && option !== null ? option.value : option;
+                  const optionType = typeof option === 'object' && option !== null ? option.type : 'text';
+                  const isImageOption = optionType === 'image';
+                  const isImageFile = isImageOption && optionValue instanceof File;
+                  const isImageUrl = isImageOption && typeof optionValue === 'string' && optionValue !== '';
+                  
+                  return (
+                    <div key={oIdx} className="flex items-start gap-2 p-3 border border-gray-200 rounded-lg bg-gray-50">
+                      <input
+                        type="radio"
+                        name={`correct-${q.id || qIndex}`}
+                        checked={q.correctAnswer === oIdx}
+                        onChange={() => handleChange(qIndex, 'correctAnswer', oIdx)}
+                        className="mt-1 w-4 h-4 text-blue-600 focus:ring-blue-500"
+                      />
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-medium text-gray-700">
+                            Option {String.fromCharCode(65 + oIdx)}
+                          </label>
+                          <select
+                            value={optionType}
+                            onChange={(e) => {
+                              const newType = e.target.value;
+                              if (newType === 'text') {
+                                handleOptionChange(qIndex, oIdx, 'type', 'text');
+                                handleOptionChange(qIndex, oIdx, 'value', '');
+                              } else {
+                                handleOptionChange(qIndex, oIdx, 'type', 'image');
+                                handleOptionChange(qIndex, oIdx, 'value', null);
+                              }
+                            }}
+                            className="text-xs px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="text">Text</option>
+                            <option value="image">Image</option>
+                          </select>
+                        </div>
+                        
+                        {optionType === 'text' ? (
+                          <input
+                            type="text"
+                            value={optionValue || ''}
+                            onChange={(e) => handleOptionChange(qIndex, oIdx, 'value', e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder={`Enter option ${String.fromCharCode(65 + oIdx)}`}
+                          />
+                        ) : (
+                          <div className="space-y-2">
+                            {isImageUrl || isImageFile ? (
+                              <div className="relative group">
+                                <img
+                                  src={isImageFile ? URL.createObjectURL(optionValue) : optionValue}
+                                  alt={`Option ${String.fromCharCode(65 + oIdx)}`}
+                                  className="w-full max-h-32 object-contain rounded-lg border border-gray-300 bg-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleOptionImageChange(qIndex, oIdx, null)}
+                                  className="absolute top-2 right-2 bg-white bg-opacity-90 hover:bg-red-100 rounded-full p-1 text-red-600 border border-red-200 shadow opacity-85 hover:opacity-100 transition-all"
+                                  title="Remove image"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <label className="block w-full cursor-pointer bg-white border border-dashed border-gray-300 rounded-lg px-4 py-4 flex flex-col items-center justify-center text-center text-gray-500 hover:border-blue-400 transition-all">
+                                <Upload className="w-5 h-5 mb-1" />
+                                <span className="text-xs">Click to upload image</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files && e.target.files[0];
+                                    if (file) {
+                                      handleOptionImageChange(qIndex, oIdx, file);
+                                    }
+                                  }}
+                                  className="hidden"
+                                />
+                              </label>
+                            )}
+                          </div>
+                        )}
+                        {q.correctAnswer === oIdx && (
+                          <span className="text-xs text-green-600 font-medium">✓ Correct Answer</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

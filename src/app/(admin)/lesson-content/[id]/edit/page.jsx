@@ -23,10 +23,12 @@ export default function EditLessonContentPage({ params }) {
     title: "",
     description: "",
     video: {
+      type: "upload",
       file: null,
       filePath: "",
       fileName: "",
-      duration: ""
+      duration: "",
+      youtubeUrl: ""
     },
     document: {
       file: null,
@@ -65,10 +67,12 @@ export default function EditLessonContentPage({ params }) {
             title: content.title || "",
             description: content.description || "",
             video: {
+              type: content.video?.type || (content.video?.youtubeUrl ? "youtube" : "upload"),
               file: null,
               filePath: content.video?.filePath || "",
               fileName: content.video?.fileName || "",
-              duration: content.video?.duration?.toString() || ""
+              duration: content.video?.duration?.toString() || "",
+              youtubeUrl: content.video?.youtubeUrl || ""
             },
             document: {
               file: null,
@@ -396,10 +400,11 @@ export default function EditLessonContentPage({ params }) {
       setSubmitting(true);
 
       // Check if there are file uploads
-      const hasVideoFile = formData.video.file && formData.video.file instanceof File;
+      const hasVideoFile = formData.video.type === "upload" && formData.video.file && formData.video.file instanceof File;
       const hasDocumentFile = formData.document.file && formData.document.file instanceof File;
       const hasFileUploads = hasVideoFile || hasDocumentFile;
-      const hasExistingVideo = formData.video.filePath && typeof formData.video.filePath === 'string' && !formData.video.filePath.startsWith('blob:');
+      const hasExistingVideo = formData.video.type === "upload" && formData.video.filePath && typeof formData.video.filePath === 'string' && !formData.video.filePath.startsWith('blob:');
+      const hasYouTubeUrl = formData.video.type === "youtube" && formData.video.youtubeUrl && formData.video.youtubeUrl.trim();
       const hasExistingDocument = formData.document.filePath && typeof formData.document.filePath === 'string' && !formData.document.filePath.startsWith('blob:');
 
       let contentData;
@@ -417,12 +422,15 @@ export default function EditLessonContentPage({ params }) {
         contentData.append('isRequired', formData.isRequired);
         contentData.append('isActive', formData.isActive);
 
-        // Append video file if it's a File
-        if (hasVideoFile) {
+        // Append video data
+        contentData.append('videoType', formData.video.type);
+        if (formData.video.type === "upload" && hasVideoFile) {
           contentData.append('video', formData.video.file);
           if (formData.video.duration) {
             contentData.append('videoDuration', parseInt(formData.video.duration));
           }
+        } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
+          contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
         }
 
         // Append document file if it's a File
@@ -445,7 +453,11 @@ export default function EditLessonContentPage({ params }) {
           description: formData.description?.trim() || "",
           isRequired: formData.isRequired,
           isActive: formData.isActive,
-          video: hasExistingVideo ? {
+          video: formData.video.type === "youtube" && hasYouTubeUrl ? {
+            type: "youtube",
+            youtubeUrl: formData.video.youtubeUrl.trim()
+          } : hasExistingVideo ? {
+            type: "upload",
             filePath: formData.video.filePath,
             fileName: formData.video.fileName,
             duration: formData.video.duration ? parseInt(formData.video.duration) : undefined
@@ -649,8 +661,36 @@ export default function EditLessonContentPage({ params }) {
               <Video className="w-5 h-5" />
               Video Content
             </h3>
+            
+            {/* Video Type Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Video Source <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.video.type || "upload"}
+                onChange={(e) => {
+                  handleVideoChange("type", e.target.value);
+                  // Clear the other type's data
+                  if (e.target.value === "upload") {
+                    handleVideoChange("youtubeUrl", "");
+                  } else {
+                    handleVideoChange("file", null);
+                    handleVideoChange("fileName", "");
+                    handleVideoChange("filePath", "");
+                    handleVideoChange("duration", "");
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="upload">Upload Video File</option>
+                <option value="youtube">YouTube URL</option>
+              </select>
+            </div>
+
+            {formData.video.type === "upload" ? (
             <div className="space-y-4">
-              {formData.video.filePath ? (
+                {formData.video.filePath && !formData.video.filePath.startsWith('blob:') ? (
                 <div className="relative group">
                   <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <Video className="w-8 h-8 text-blue-600" />
@@ -674,7 +714,7 @@ export default function EditLessonContentPage({ params }) {
               ) : null}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.video.filePath ? "Replace Video File" : "Upload Video File"} <span className="text-red-500">*</span>
+                    {formData.video.filePath && !formData.video.filePath.startsWith('blob:') ? "Replace Video File" : "Upload Video File"}
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -703,7 +743,6 @@ export default function EditLessonContentPage({ params }) {
                         };
                         video.onerror = () => {
                           console.error('Error loading video metadata');
-                          // If auto-calculation fails, keep the field editable
                         };
                         video.src = URL.createObjectURL(file);
                       }
@@ -737,6 +776,23 @@ export default function EditLessonContentPage({ params }) {
                 </div>
               </div>
             </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  YouTube URL <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.video.youtubeUrl || ""}
+                  onChange={(e) => handleVideoChange("youtubeUrl", e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter the full YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Document Upload Section */}
@@ -856,7 +912,7 @@ export default function EditLessonContentPage({ params }) {
                     <input
                       type="number"
                       min="0"
-                      value={formData.document.pageCount}
+                      value={formData.document.pageCount || ""}
                       onChange={(e) => handleDocumentChange("pageCount", e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       placeholder="Enter page count"

@@ -32,9 +32,17 @@ export const getAllEvents = async (params = {}) => {
 /**
  * Get event by ID
  * @param {string} id - Event ID
+ * @param {boolean} populateNames - If true, returns populated category and eventType names (for details view)
  */
-export const getEventById = async (id) => {
-  return await apiRequest(`/events/list/${id}`, {
+export const getEventById = async (id, populateNames = false) => {
+  const queryParams = new URLSearchParams();
+  if (populateNames) {
+    queryParams.append('populate', 'true');
+  }
+  const queryString = queryParams.toString();
+  const endpoint = `/events/list/${id}${queryString ? `?${queryString}` : ''}`;
+  
+  return await apiRequest(endpoint, {
     method: 'GET',
   });
 };
@@ -113,6 +121,16 @@ export const getUpcomingEvents = async (limit = 10) => {
  */
 export const getEventsByCategory = async (categoryId) => {
   return await apiRequest(`/events/category/${categoryId}`, {
+    method: 'GET',
+  });
+};
+
+/**
+ * Get event attendees/registrations
+ * @param {string} id - Event ID
+ */
+export const getEventAttendees = async (id) => {
+  return await apiRequest(`/events/attendees/${id}`, {
     method: 'GET',
   });
 };

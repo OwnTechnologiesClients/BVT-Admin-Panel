@@ -127,3 +127,27 @@ export const getTestResults = async (id) => {
   });
 };
 
+/**
+ * Get students who took a specific test (admin)
+ * @param {string} testId - Test ID
+ */
+export const getTestStudents = async (testId) => {
+  return await apiRequest(`/tests/admin/students/${testId}`, {
+    method: 'GET',
+  });
+};
+
+/**
+ * Allow or revoke retake for a student (admin)
+ * @param {string} testId - Test ID
+ * @param {string} studentId - Student ID
+ * @param {boolean} allow - Allow or revoke retake
+ * @param {string} reason - Reason for allowing retake
+ */
+export const toggleStudentRetake = async (testId, studentId, allow, reason = '') => {
+  return await apiRequest(`/tests/admin/retake/${testId}/${studentId}`, {
+    method: 'POST',
+    body: JSON.stringify({ allow, reason }),
+  });
+};
+

@@ -54,9 +54,11 @@ const InstructorTable = () => {
   ];
 
   // Fetch instructors with server-side pagination (Oasis pattern)
-  const fetchInstructors = useCallback(async (page, limit, search, department, status) => {
+  // Supports lightweight search without triggering full table loading state
+  const fetchInstructors = useCallback(async (page, limit, search, department, status, options = {}) => {
+    const { skipLoading = false } = options;
     try {
-      setLoading(true);
+      if (!skipLoading) setLoading(true);
       setError(null);
 
       const params = {
@@ -88,7 +90,7 @@ const InstructorTable = () => {
       setError(errorMsg);
       showError('Error Loading Instructors', errorMsg);
     } finally {
-      setLoading(false);
+      if (!skipLoading) setLoading(false);
     }
   }, []);
 
@@ -110,32 +112,40 @@ const InstructorTable = () => {
   };
 
   // Initial fetch
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
+  
   useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
     fetchInstructors(1, 10, "", "", "");
     fetchStats();
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
   }, [fetchInstructors]);
 
-  // Debounced search (300ms like Oasis)
-  const searchTimeoutRef = useRef(null);
+  // Explicit search trigger (type + Enter or button)
+  const handleSearch = useCallback(() => {
+    // Always reset to first page when searching
+    fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
+  }, [fetchInstructors, pagination.limit, searchTerm, filterDepartment, filterStatus]);
+
+  // Handle filter changes - trigger API call immediately (not search)
+  const prevFiltersRef = useRef({ filterDepartment, filterStatus });
   useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      return;
     }
     
-    searchTimeoutRef.current = setTimeout(() => {
+    // Only trigger if filters actually changed (not search)
+    if (prevFiltersRef.current.filterDepartment !== filterDepartment || 
+        prevFiltersRef.current.filterStatus !== filterStatus) {
+      prevFiltersRef.current = { filterDepartment, filterStatus };
       fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
-    }, 300);
-    
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchTerm, fetchInstructors, pagination.limit, filterDepartment, filterStatus]);
-
-  // Handle filter changes - trigger API call
-  useEffect(() => {
-    fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
+    }
   }, [filterDepartment, filterStatus, fetchInstructors, pagination.limit, searchTerm]);
 
   // Handle page change
@@ -292,6 +302,11 @@ const InstructorTable = () => {
                 placeholder="Search instructors by name, email, or department..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
