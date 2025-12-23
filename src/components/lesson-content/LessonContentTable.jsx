@@ -230,13 +230,7 @@ const LessonContentTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "type",
-      label: "Content Type",
-      options: ["video", "document", "mixed"]
-    }
-  ];
+  const filters = [];
 
   const stats = [
     {

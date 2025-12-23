@@ -192,22 +192,7 @@ const TestsTable = () => {
   ];
 
   // Get unique courses from current tests (for filter dropdown)
-  const uniqueCourses = Array.from(
-    new Set(formattedTests.map(t => t.course).filter(Boolean))
-  ).sort();
-
-  const filters = [
-    {
-      key: "course",
-      label: "Course",
-      options: uniqueCourses
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: ["Active", "Inactive"]
-    }
-  ];
+  const filters = [];
 
   const stats = [
     {
@@ -230,13 +215,6 @@ const TestsTable = () => {
       icon: "❓",
       bgColor: "bg-purple-100",
       iconColor: "text-purple-600"
-    },
-    {
-      label: "Total Students",
-      value: formattedTests.reduce((sum, t) => sum + t.totalStudents, 0),
-      icon: "👥",
-      bgColor: "bg-yellow-100",
-      iconColor: "text-yellow-600"
     }
   ];
 

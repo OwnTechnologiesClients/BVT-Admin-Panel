@@ -50,7 +50,8 @@ const UsersTable = () => {
 
       const response = await userAPI.getAllUsers(params);
       if (response.success) {
-        setUsers(response.data || []);
+        const usersData = response.data || [];
+        setUsers(usersData);
         if (response.pagination) {
           setPagination({
             page: response.pagination.page || page,
@@ -75,12 +76,11 @@ const UsersTable = () => {
     try {
       const response = await userAPI.getUserStats();
       if (response.success && response.data) {
-        setStats({
+        setStats(prev => ({
+          ...prev,
           totalUsers: response.data.totalUsers || 0,
-          activeUsers: response.data.activeUsers || 0,
-          instructors: response.data.instructors || 0,
-          admins: response.data.admins || 0
-        });
+          activeUsers: response.data.activeUsers || 0
+        }));
       }
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -100,6 +100,20 @@ const UsersTable = () => {
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Update instructor and admin counts when users change
+  useEffect(() => {
+    if (users.length > 0) {
+      const instructorCount = users.filter(u => u.role === 'instructor').length;
+      const adminCount = users.filter(u => u.role === 'admin').length;
+      
+      setStats(prev => ({
+        ...prev,
+        instructors: instructorCount,
+        admins: adminCount
+      }));
+    }
+  }, [users]);
 
   // Handle search change from DataTable
   const handleSearchChange = useCallback((search) => {
@@ -268,18 +282,7 @@ const UsersTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "role",
-      label: "Role",
-      options: Array.from(new Set(users.map(u => u.role).filter(Boolean))).sort()
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: ["Active", "Inactive"]
-    }
-  ];
+  const filters = [];
 
   if (loading && users.length === 0) {
     return (

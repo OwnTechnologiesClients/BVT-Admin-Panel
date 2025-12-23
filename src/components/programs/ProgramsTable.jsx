@@ -296,13 +296,7 @@ const ProgramsTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "category",
-      label: "Category",
-      options: Array.from(new Set(formattedPrograms.map(p => p.category))).filter(Boolean)
-    }
-  ];
+  const filters = [];
 
   const stats = [
     {

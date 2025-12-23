@@ -15,7 +15,6 @@ const CoursesTable = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [pagination, setPagination] = useState({
     page: 1,
@@ -48,7 +47,7 @@ const CoursesTable = () => {
         ...(search && { search }),
         ...(status && { status: status.toLowerCase() }),
         ...(category && { category }),
-        ...(type && { isOnline: type === "Online" })
+        ...(type && { isOnline: type === "Online" ? "true" : "false" })
       };
 
       const response = await courseAPI.getAllCourses(params);
@@ -159,31 +158,29 @@ const CoursesTable = () => {
   // Handle search change from DataTable
   const handleSearchChange = useCallback((search) => {
     setSearchTerm(search);
-    fetchCourses(1, pagination.limit, search, statusFilter, categoryFilter, typeFilter);
-  }, [fetchCourses, pagination.limit, statusFilter, categoryFilter, typeFilter]);
+    fetchCourses(1, pagination.limit, search, statusFilter, "", typeFilter);
+  }, [fetchCourses, pagination.limit, statusFilter, typeFilter]);
 
   // Handle filter change from DataTable
   const handleFilterChange = useCallback((filters) => {
     const newStatusFilter = filters.status || "";
-    const newCategoryFilter = filters.category || "";
     const newTypeFilter = filters.type || "";
     
     setStatusFilter(newStatusFilter);
-    setCategoryFilter(newCategoryFilter);
     setTypeFilter(newTypeFilter);
     
-    fetchCourses(1, pagination.limit, searchTerm, newStatusFilter, newCategoryFilter, newTypeFilter);
+    fetchCourses(1, pagination.limit, searchTerm, newStatusFilter, "", newTypeFilter);
   }, [fetchCourses, pagination.limit, searchTerm]);
 
   // Handle page change
   const handlePageChange = useCallback((newPage) => {
-    fetchCourses(newPage, pagination.limit, searchTerm, statusFilter, categoryFilter, typeFilter);
-  }, [fetchCourses, pagination.limit, searchTerm, statusFilter, categoryFilter, typeFilter]);
+    fetchCourses(newPage, pagination.limit, searchTerm, statusFilter, "", typeFilter);
+  }, [fetchCourses, pagination.limit, searchTerm, statusFilter, typeFilter]);
 
   // Handle page size change
   const handlePageSizeChange = useCallback((newPageSize) => {
-    fetchCourses(1, newPageSize, searchTerm, statusFilter, categoryFilter, typeFilter);
-  }, [fetchCourses, searchTerm, statusFilter, categoryFilter, typeFilter]);
+    fetchCourses(1, newPageSize, searchTerm, statusFilter, "", typeFilter);
+  }, [fetchCourses, searchTerm, statusFilter, typeFilter]);
 
   // Format course data for display
   const formatCourses = (courses) => {
@@ -270,28 +267,7 @@ const CoursesTable = () => {
     }
   ];
 
-  // Get unique categories from current courses (for filter dropdown)
-  const uniqueCategories = Array.from(
-    new Set(courses.map(c => c.category?.name).filter(Boolean))
-  ).sort();
-
-  const filters = [
-    {
-      key: "status",
-      label: "Status",
-      options: ["active", "draft", "inactive"]
-    },
-    {
-      key: "category",
-      label: "Category",
-      options: uniqueCategories
-    },
-    {
-      key: "type",
-      label: "Type",
-      options: ["Online", "Offline"]
-    }
-  ];
+  const filters = [];
 
   const computedStats = [
     {
@@ -338,7 +314,7 @@ const CoursesTable = () => {
         if (response.success) {
           showSuccess('Course Deleted!', `"${course.title}" has been deleted successfully.`);
           // Refresh current page
-          await fetchCourses(pagination.page, pagination.limit, searchTerm, statusFilter, categoryFilter, typeFilter);
+          await fetchCourses(pagination.page, pagination.limit, searchTerm, statusFilter, "", typeFilter);
           await fetchStats();
         } else {
           showError('Delete Failed', response.message || 'Failed to delete course');

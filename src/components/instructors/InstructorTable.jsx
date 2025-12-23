@@ -272,18 +272,7 @@ const InstructorTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "department",
-      label: "Department",
-      options: departments.filter(d => d.value).map(d => d.value)
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: ["Active", "Inactive"]
-    }
-  ];
+  const filters = [];
 
   const statsForTable = [
     {
@@ -300,20 +289,6 @@ const InstructorTable = () => {
       bgColor: "bg-green-100",
       iconColor: "text-green-600",
       color: "text-green-600"
-    },
-    {
-      label: "Courses Taught",
-      value: stats.coursesTaught,
-      icon: "📚",
-      bgColor: "bg-yellow-100",
-      iconColor: "text-yellow-600"
-    },
-    {
-      label: "Total Students",
-      value: stats.totalStudents,
-      icon: "🎓",
-      bgColor: "bg-purple-100",
-      iconColor: "text-purple-600"
     }
   ];
 

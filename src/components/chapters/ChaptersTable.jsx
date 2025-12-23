@@ -232,13 +232,7 @@ const ChaptersTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "course",
-      label: "Course",
-      options: courses.map(c => c.title)
-    }
-  ];
+  const filters = [];
 
   const stats = [
     {

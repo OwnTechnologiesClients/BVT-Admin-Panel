@@ -124,13 +124,6 @@ const StudentsTable = () => {
         bgColor: "bg-blue-100",
         iconColor: "text-blue-600",
       },
-      {
-        label: "With Phone",
-        value: students.filter((s) => s.phone).length,
-        icon: "📞",
-        bgColor: "bg-yellow-100",
-        iconColor: "text-yellow-600",
-      },
     ];
   }, [students, pagination.total]);
 

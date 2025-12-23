@@ -21,6 +21,7 @@ const EventsTable = () => {
     total: 0,
     totalPages: 0
   });
+  const [upcomingCount, setUpcomingCount] = useState(0);
   const isInitialMount = useRef(true);
   const hasInitialFetch = useRef(false);
 
@@ -69,6 +70,7 @@ const EventsTable = () => {
     if (hasInitialFetch.current) return;
     hasInitialFetch.current = true;
     fetchEvents(1, 10, "", "", "");
+    fetchUpcomingCount();
     // Mark initial mount as complete after a short delay to allow other effects to skip
     const timer = setTimeout(() => {
       isInitialMount.current = false;
@@ -197,16 +199,20 @@ const EventsTable = () => {
   // Format events for display
   const formattedEvents = events.map(formatEvent);
 
+  // Fetch upcoming events count from backend
+  const fetchUpcomingCount = useCallback(async () => {
+    try {
+      const response = await eventAPI.getEventStats();
+      if (response.success && response.data) {
+        setUpcomingCount(response.data.upcomingEvents || 0);
+      }
+    } catch (err) {
+      console.error('Error fetching upcoming events count:', err);
+    }
+  }, []);
+
   // Calculate stats from current events
   const totalEvents = pagination.total || formattedEvents.length;
-  const upcomingCount = formattedEvents.filter(e => e.status === "Upcoming").length;
-  const totalAttendees = formattedEvents.reduce((sum, event) => sum + event.registeredAttendees, 0);
-  const avgCapacity = formattedEvents.length > 0
-    ? `${Math.round(formattedEvents.reduce((sum, event) => {
-        const max = event.maxAttendees || 1;
-        return sum + (event.registeredAttendees / max);
-      }, 0) / formattedEvents.length * 100)}%`
-    : "0%";
 
   const columns = [
     {
@@ -278,27 +284,7 @@ const EventsTable = () => {
     }
   ];
 
-  // Get unique types and statuses from current events (for filter dropdown)
-  const uniqueTypes = Array.from(
-    new Set(formattedEvents.map(e => e.type).filter(Boolean))
-  ).sort();
-
-  const uniqueStatuses = Array.from(
-    new Set(formattedEvents.map(e => e.status).filter(Boolean))
-  ).sort();
-
-  const filters = [
-    {
-      key: "status",
-      label: "Status",
-      options: uniqueStatuses
-    },
-    {
-      key: "type",
-      label: "Type",
-      options: uniqueTypes
-    }
-  ];
+  const filters = [];
 
   const stats = [
     {
@@ -315,20 +301,6 @@ const EventsTable = () => {
       bgColor: "bg-yellow-100",
       iconColor: "text-yellow-600",
       color: "text-yellow-600"
-    },
-    {
-      label: "Total Attendees",
-      value: totalAttendees,
-      icon: "👥",
-      bgColor: "bg-green-100",
-      iconColor: "text-green-600"
-    },
-    {
-      label: "Avg. Capacity",
-      value: avgCapacity,
-      icon: "📊",
-      bgColor: "bg-purple-100",
-      iconColor: "text-purple-600"
     }
   ];
 

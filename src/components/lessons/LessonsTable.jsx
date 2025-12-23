@@ -244,13 +244,7 @@ const LessonsTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "chapter",
-      label: "Chapter",
-      options: chapters.map(c => c.title)
-    }
-  ];
+  const filters = [];
 
   const stats = [
     {
