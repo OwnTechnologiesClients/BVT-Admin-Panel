@@ -6,6 +6,7 @@ import { apiRequest } from '../api';
  * @param {Object} params - Query parameters
  * @param {number} params.page - Page number (default: 1)
  * @param {number} params.limit - Items per page (default: 10)
+ * @param {string} params.search - Search query
  * @param {string} params.status - Filter by status (open, resolved, closed)
  * @param {string} params.courseId - Filter by course ID
  * @param {string} params.studentId - Filter by student ID
@@ -15,6 +16,7 @@ export const getAllQueries = async (params = {}) => {
   
   if (params.page) queryParams.append('page', params.page);
   if (params.limit) queryParams.append('limit', params.limit);
+  if (params.search) queryParams.append('search', params.search);
   if (params.status) queryParams.append('status', params.status);
   if (params.courseId) queryParams.append('courseId', params.courseId);
   if (params.studentId) queryParams.append('studentId', params.studentId);

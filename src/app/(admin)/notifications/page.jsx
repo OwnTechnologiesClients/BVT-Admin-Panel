@@ -26,6 +26,7 @@ const AdminNotificationsPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedQueryId, setSelectedQueryId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(null);
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 10,
@@ -33,12 +34,15 @@ const AdminNotificationsPage = () => {
     totalPages: 0
   });
 
+  const [searchTerm, setSearchTerm] = useState("");
+
   // Fetch queries from API
-  const fetchQueries = useCallback(async (page = 1, limit = 10, status = null) => {
+  const fetchQueries = useCallback(async (page = 1, limit = 10, status = null, search = "") => {
     try {
       setLoading(true);
       const params = { page, limit };
       if (status && status !== "") params.status = status.toLowerCase();
+      if (search) params.search = search;
       
       const response = await queryAPI.getAllQueries(params);
       if (response.success && response.data) {
@@ -90,6 +94,12 @@ const AdminNotificationsPage = () => {
   useEffect(() => {
     fetchQueries();
   }, [fetchQueries]);
+
+  // Handle search change from DataTable
+  const handleSearchChange = useCallback((search) => {
+    setSearchTerm(search);
+    fetchQueries(1, pagination.limit, null, search);
+  }, [fetchQueries, pagination.limit]);
 
   const selectedQuery = useMemo(
     () => queries.find((query) => query.id === selectedQueryId || query._id === selectedQueryId) ?? null,
@@ -211,7 +221,7 @@ const AdminNotificationsPage = () => {
   const handleSendReply = async (messageContent) => {
     // Refresh the query list to get updated data (message or status change)
     try {
-      await fetchQueries(pagination.page, pagination.limit);
+      await fetchQueries(pagination.page, pagination.limit, currentStatus, searchTerm);
     } catch (error) {
       console.error("Error refreshing queries:", error);
     }
@@ -236,11 +246,13 @@ const AdminNotificationsPage = () => {
         searchPlaceholder="Search by student, course, or subject..."
         onView={handleSelectQuery}
         pagination={pagination}
-        onPageChange={(page) => fetchQueries(page, pagination.limit)}
-        onPageSizeChange={(limit) => fetchQueries(1, limit)}
+        onPageChange={(page) => fetchQueries(page, pagination.limit, null, searchTerm)}
+        onPageSizeChange={(limit) => fetchQueries(1, limit, null, searchTerm)}
+        onSearchChange={handleSearchChange}
         onFilterChange={(filters) => {
           const status = filters.status || null;
-          fetchQueries(1, pagination.limit, status);
+          setCurrentStatus(status);
+          fetchQueries(1, pagination.limit, status, searchTerm);
         }}
         serverSide={true}
       />

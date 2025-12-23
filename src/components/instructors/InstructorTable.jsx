@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Badge, Button } from "@/components/ui";
-import { Eye, Edit, Trash2, Plus, Filter, Search, Users, UserCheck, Award, BookOpen } from "lucide-react";
+import { Badge } from "@/components/ui";
+import DataTable from "@/components/common/DataTable";
 import * as instructorAPI from "@/lib/api/instructor";
 import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
@@ -126,27 +125,22 @@ const InstructorTable = () => {
     return () => clearTimeout(timer);
   }, [fetchInstructors]);
 
-  // Explicit search trigger (type + Enter or button)
-  const handleSearch = useCallback(() => {
-    // Always reset to first page when searching
-    fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
-  }, [fetchInstructors, pagination.limit, searchTerm, filterDepartment, filterStatus]);
+  // Handle search change from DataTable
+  const handleSearchChange = useCallback((search) => {
+    setSearchTerm(search);
+    fetchInstructors(1, pagination.limit, search, filterDepartment, filterStatus);
+  }, [fetchInstructors, pagination.limit, filterDepartment, filterStatus]);
 
-  // Handle filter changes - trigger API call immediately (not search)
-  const prevFiltersRef = useRef({ filterDepartment, filterStatus });
-  useEffect(() => {
-    // Skip on initial mount
-    if (isInitialMount.current) {
-      return;
-    }
+  // Handle filter change from DataTable
+  const handleFilterChange = useCallback((filters) => {
+    const newDepartmentFilter = filters.department || "";
+    const newStatusFilter = filters.status || "";
     
-    // Only trigger if filters actually changed (not search)
-    if (prevFiltersRef.current.filterDepartment !== filterDepartment || 
-        prevFiltersRef.current.filterStatus !== filterStatus) {
-      prevFiltersRef.current = { filterDepartment, filterStatus };
-      fetchInstructors(1, pagination.limit, searchTerm, filterDepartment, filterStatus);
-    }
-  }, [filterDepartment, filterStatus, fetchInstructors, pagination.limit, searchTerm]);
+    setFilterDepartment(newDepartmentFilter);
+    setFilterStatus(newStatusFilter);
+    
+    fetchInstructors(1, pagination.limit, searchTerm, newDepartmentFilter, newStatusFilter);
+  }, [fetchInstructors, pagination.limit, searchTerm]);
 
   // Handle page change
   const handlePageChange = useCallback((newPage) => {
@@ -184,7 +178,7 @@ const InstructorTable = () => {
   // Format instructors for display
   const formattedInstructors = instructors.map(formatInstructor);
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (instructor) => {
     const result = await showDeleteConfirm(
       'Delete Instructor?',
       'This action cannot be undone. All instructor data will be permanently deleted.'
@@ -192,7 +186,7 @@ const InstructorTable = () => {
     
     if (result.isConfirmed) {
     try {
-      const response = await instructorAPI.deleteInstructor(id);
+      const response = await instructorAPI.deleteInstructor(instructor.id);
       if (response.success) {
           showSuccess('Instructor Deleted!', 'The instructor has been deleted successfully.');
         // Refresh current page
@@ -206,6 +200,128 @@ const InstructorTable = () => {
       }
     }
   };
+
+  const handleEdit = (instructor) => {
+    router.push(`/instructors/update/${instructor.id}`);
+  };
+
+  const handleView = (instructor) => {
+    router.push(`/instructors/details/${instructor.id}`);
+  };
+
+  const handleAdd = () => {
+    router.push('/instructors/add');
+  };
+
+  const columns = [
+    {
+      key: "name",
+      label: "Instructor",
+      render: (value, item) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+            <span className="text-white font-semibold text-sm">
+              {item.firstName[0] || ''}{item.lastName[0] || ''}
+            </span>
+          </div>
+          <div>
+            <p className="font-medium text-gray-900">
+              {item.firstName} {item.lastName}
+            </p>
+            <p className="text-sm text-gray-600">{item.email}</p>
+            {item.specializations && (
+              <p className="text-xs text-gray-500">{item.specializations}</p>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      key: "department",
+      label: "Department",
+      render: (value, item) => (
+        <Badge color={getDepartmentColor(item.departmentKey)}>
+          {value}
+        </Badge>
+      )
+    },
+    {
+      key: "experience",
+      label: "Experience"
+    },
+    {
+      key: "rating",
+      label: "Rating",
+      render: (value) => (
+        <div className="flex items-center gap-1">
+          <div className="flex">{renderStars(value)}</div>
+          {value > 0 && (
+            <span className="text-sm text-gray-600 ml-1">{value.toFixed(1)}</span>
+          )}
+        </div>
+      )
+    },
+    {
+      key: "isActive",
+      label: "Status",
+      render: (value) => (
+        <Badge color={getStatusColor(value)}>
+          {value ? 'Active' : 'Inactive'}
+        </Badge>
+      )
+    }
+  ];
+
+  const filters = [
+    {
+      key: "department",
+      label: "Department",
+      options: departments.filter(d => d.value).map(d => d.value)
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: ["Active", "Inactive"]
+    }
+  ];
+
+  const statsForTable = [
+    {
+      label: "Total Instructors",
+      value: stats.totalInstructors || pagination.total || 0,
+      icon: "👥",
+      bgColor: "bg-blue-100",
+      iconColor: "text-blue-600"
+    },
+    {
+      label: "Active Instructors",
+      value: stats.activeInstructors,
+      icon: "✓",
+      bgColor: "bg-green-100",
+      iconColor: "text-green-600",
+      color: "text-green-600"
+    },
+    {
+      label: "Courses Taught",
+      value: stats.coursesTaught,
+      icon: "📚",
+      bgColor: "bg-yellow-100",
+      iconColor: "text-yellow-600"
+    },
+    {
+      label: "Total Students",
+      value: stats.totalStudents,
+      icon: "🎓",
+      bgColor: "bg-purple-100",
+      iconColor: "text-purple-600"
+    }
+  ];
+
+  // Format instructors to include name field
+  const formattedData = formattedInstructors.map(i => ({
+    ...i,
+    name: `${i.firstName} ${i.lastName}`
+  }));
 
   const getStatusColor = (isActive) => {
     return isActive ? "success" : "error";
@@ -257,7 +373,7 @@ const InstructorTable = () => {
     return stars;
   };
 
-  if (loading) {
+  if (loading && instructors.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-gray-600">Loading instructors...</p>
@@ -265,319 +381,34 @@ const InstructorTable = () => {
     );
   }
 
+  if (error && instructors.length === 0) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Header with Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Instructors Management</h2>
-          <p className="text-gray-600">Manage and monitor all instructors and their courses</p>
-        </div>
-        <Button 
-          variant="primary" 
-          className="flex items-center gap-2"
-          onClick={() => router.push('/instructors/add')}
-        >
-          <Plus className="w-4 h-4" />
-          Add New Instructor
-        </Button>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600 text-sm">{error}</p>
-        </div>
-      )}
-
-      {/* Filters and Search */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200">
-        <div className="flex flex-col lg:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search instructors by name, email, or department..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSearch();
-                  }
-                }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-
-          {/* Department Filter */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={filterDepartment}
-              onChange={(e) => setFilterDepartment(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="">All Departments</option>
-              {departments.filter(d => d.value).map(dept => (
-                <option key={dept.value} value={dept.value}>
-                  {dept.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Status Filter */}
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-            <option value="">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            </select>
-
-        </div>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Instructors</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalInstructors || pagination.total || 0}</p>
-            </div>
-            <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-              <Users className="w-4 h-4 text-blue-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Active Instructors</p>
-              <p className="text-2xl font-bold text-green-600">{stats.activeInstructors}</p>
-            </div>
-            <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-              <UserCheck className="w-4 h-4 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Courses Taught</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.coursesTaught}</p>
-            </div>
-            <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <BookOpen className="w-4 h-4 text-yellow-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Students</p>
-              <p className="text-2xl font-bold text-purple-600">{stats.totalStudents}</p>
-            </div>
-            <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-              <Award className="w-4 h-4 text-purple-600" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Instructors Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-          </div>
-        ) : (
-          <>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Instructor</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Department</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Experience</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Rating</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-                  {formattedInstructors.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="py-8 text-center text-gray-500">
-                        No instructors found
-                      </td>
-                    </tr>
-                  ) : (
-                    formattedInstructors.map((formatted) => {
-                      return (
-                        <tr key={formatted.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-white font-semibold text-sm">
-                                  {formatted.firstName[0] || ''}{formatted.lastName[0] || ''}
-                        </span>
-                      </div>
-                      <div>
-                                <p className="font-medium text-gray-900">
-                                  {formatted.firstName} {formatted.lastName}
-                                </p>
-                                <p className="text-sm text-gray-600">{formatted.email}</p>
-                                {formatted.specializations && (
-                                  <p className="text-xs text-gray-500">{formatted.specializations}</p>
-                                )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                            <Badge color={getDepartmentColor(formatted.departmentKey)}>
-                              {formatted.department}
-                            </Badge>
-                  </td>
-                          <td className="py-4 px-4 text-gray-900">{formatted.experience}</td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-1">
-                              <div className="flex">{renderStars(formatted.rating)}</div>
-                              {formatted.rating > 0 && (
-                                <span className="text-sm text-gray-600 ml-1">{formatted.rating.toFixed(1)}</span>
-                              )}
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                            <Badge color={getStatusColor(formatted.isActive)}>
-                              {formatted.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center gap-2">
-                      <Link
-                                href={`/instructors/details/${formatted.id}`}
-                        className="p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded"
-                        title="View Details"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Link>
-                              <Link
-                                href={`/instructors/update/${formatted.id}`}
-                        className="p-1 text-gray-600 hover:text-gray-700 hover:bg-gray-50 rounded"
-                        title="Edit Instructor"
-                      >
-                        <Edit className="w-4 h-4" />
-                              </Link>
-                      <button
-                                onClick={() => handleDelete(formatted.id)}
-                        className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
-                        title="Delete Instructor"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-                      );
-                    })
-                  )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Pagination */}
-            {pagination.total > 0 && (
-        <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Left side: Items info and page size selector */}
-            <div className="flex items-center gap-4">
-            <div className="text-sm text-gray-700">
-                Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{' '}
-                <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{' '}
-                <span className="font-medium">{pagination.total}</span> instructors
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-gray-700">Show:</label>
-                <select
-                  value={pagination.limit}
-                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                  className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Right side: Page navigation */}
-            <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pagination.page === 1}
-                      onClick={() => handlePageChange(pagination.page - 1)}
-                    >
-                      Previous
-                    </Button>
-              
-              {/* Page numbers */}
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (pagination.totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (pagination.page <= 3) {
-                    pageNum = i + 1;
-                  } else if (pagination.page >= pagination.totalPages - 2) {
-                    pageNum = pagination.totalPages - 4 + i;
-                  } else {
-                    pageNum = pagination.page - 2 + i;
-                  }
-                  
-                  if (pageNum < 1 || pageNum > pagination.totalPages) return null;
-                  
-                        return (
-                            <Button
-                      key={pageNum}
-                      variant={pageNum === pagination.page ? "primary" : "outline"}
-                              size="sm"
-                      onClick={() => handlePageChange(pageNum)}
-                      className="min-w-[2.5rem]"
-                            >
-                      {pageNum}
-                            </Button>
-                        );
-                      })}
-              </div>
-              
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={pagination.page === pagination.totalPages}
-                      onClick={() => handlePageChange(pagination.page + 1)}
-                    >
-                      Next
-                    </Button>
-            </div>
-          </div>
-        </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+    <DataTable
+      title="Instructors Management"
+      description="Manage and monitor all instructors and their courses"
+      data={formattedData}
+      columns={columns}
+      searchPlaceholder="Search instructors by name, email, or department..."
+      filters={filters}
+      stats={statsForTable}
+      pagination={pagination}
+      onPageChange={handlePageChange}
+      onPageSizeChange={handlePageSizeChange}
+      onSearchChange={handleSearchChange}
+      onFilterChange={handleFilterChange}
+      onAdd={handleAdd}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+      onView={handleView}
+      serverSide={true}
+    />
   );
 };
 

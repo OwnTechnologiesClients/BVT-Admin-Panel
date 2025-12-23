@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
-import { Search, Filter, Eye, Edit, Trash2, Plus } from "lucide-react";
+import DataTable from "@/components/common/DataTable";
 import * as testAPI from "@/lib/api/test";
 import * as courseAPI from "@/lib/api/course";
 import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
@@ -92,31 +92,26 @@ const TestsTable = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Explicit search trigger (type + Enter or button)
-  const handleSearch = useCallback(() => {
+  // Handle search change from DataTable
+  const handleSearchChange = useCallback((search) => {
+    setSearchTerm(search);
     const isActive = statusFilter === "Active" ? true : statusFilter === "Inactive" ? false : undefined;
     const courseId = courseFilter || "";
-    // Always reset to first page when searching
+    fetchTests(1, pagination.limit, search, courseId, isActive);
+  }, [fetchTests, pagination.limit, courseFilter, statusFilter]);
+
+  // Handle filter change from DataTable
+  const handleFilterChange = useCallback((filters) => {
+    const newCourseFilter = filters.course || "";
+    const newStatusFilter = filters.status || "";
+    
+    setCourseFilter(newCourseFilter);
+    setStatusFilter(newStatusFilter);
+    
+    const isActive = newStatusFilter === "Active" ? true : newStatusFilter === "Inactive" ? false : undefined;
+    const courseId = newCourseFilter || "";
     fetchTests(1, pagination.limit, searchTerm, courseId, isActive);
-  }, [fetchTests, pagination.limit, searchTerm, courseFilter, statusFilter]);
-
-  // Handle filter changes - trigger API call immediately (not search)
-  const prevFiltersRef = useRef({ courseFilter, statusFilter });
-  useEffect(() => {
-    // Skip on initial mount - initial fetch already handles this
-    if (isInitialMount.current) {
-      return;
-    }
-
-    // Only trigger if filters actually changed (not search)
-    if (prevFiltersRef.current.courseFilter !== courseFilter || 
-        prevFiltersRef.current.statusFilter !== statusFilter) {
-      prevFiltersRef.current = { courseFilter, statusFilter };
-      const isActive = statusFilter === "Active" ? true : statusFilter === "Inactive" ? false : undefined;
-      const courseId = courseFilter || "";
-      fetchTests(1, pagination.limit, searchTerm, courseId, isActive);
-    }
-  }, [courseFilter, statusFilter, fetchTests, pagination.limit, searchTerm]);
+  }, [fetchTests, pagination.limit, searchTerm]);
 
   // Handle page change
   const handlePageChange = useCallback((newPage) => {
@@ -201,6 +196,19 @@ const TestsTable = () => {
     new Set(formattedTests.map(t => t.course).filter(Boolean))
   ).sort();
 
+  const filters = [
+    {
+      key: "course",
+      label: "Course",
+      options: uniqueCourses
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: ["Active", "Inactive"]
+    }
+  ];
+
   const stats = [
     {
       label: "Total Tests",
@@ -268,7 +276,7 @@ const TestsTable = () => {
     router.push(`/tests/${test.id}`);
   };
 
-  if (loading) {
+  if (loading && tests.length === 0) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-gray-600">Loading tests...</p>
@@ -276,7 +284,7 @@ const TestsTable = () => {
     );
   }
 
-  if (error) {
+  if (error && tests.length === 0) {
     return (
       <div className="bg-red-50 border border-red-200 rounded-lg p-4">
         <p className="text-red-600">{error}</p>
@@ -285,235 +293,24 @@ const TestsTable = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Statistics Cards */}
-      {stats.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {stats.map((stat, index) => (
-            <div key={index} className="bg-white p-4 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">{stat.label}</p>
-                  <p className={`text-2xl font-bold ${stat.color || 'text-gray-900'}`}>
-                    {stat.value}
-                  </p>
-                </div>
-                <div className={`w-8 h-8 ${stat.bgColor || 'bg-blue-100'} rounded-lg flex items-center justify-center`}>
-                  <span className={`${stat.iconColor || 'text-blue-600'} font-semibold`}>
-                    {stat.icon}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Filters and Search - Matching MyCourses pattern */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200">
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Tests</h2>
-            <button
-              onClick={handleAdd}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              Add New Test
-            </button>
-          </div>
-
-          {/* Filters */}
-          <div className="flex flex-col md:flex-row gap-4">
-            {/* Search */}
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search tests by title or course..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleSearch();
-                  }
-                }}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Course Filter */}
-            {uniqueCourses.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Filter className="w-5 h-5 text-gray-400" />
-                <select
-                  value={courseFilter}
-                  onChange={(e) => setCourseFilter(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">All Courses</option>
-                  {uniqueCourses.map(course => (
-                    <option key={course} value={course}>{course}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-
-          </div>
-        </div>
-
-        {/* Data Table */}
-        <div className="p-6">
-          {formattedTests.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-600">No tests found</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    {columns.map((column, index) => (
-                      <th key={index} className="text-left py-3 px-4 font-medium text-gray-700">
-                        {column.label}
-                      </th>
-                    ))}
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formattedTests.map((item, index) => (
-                    <tr key={item.id || index} className="border-b border-gray-100 hover:bg-gray-50">
-                      {columns.map((column, colIndex) => (
-                        <td key={colIndex} className="py-4 px-4">
-                          {column.render ? column.render(item[column.key], item) : item[column.key]}
-                        </td>
-                      ))}
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleView(item)}
-                            className="p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleEdit(item)}
-                            className="p-2 text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item)}
-                            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Pagination */}
-          {pagination.total > 0 && (
-            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                {/* Left side: Items info and page size selector */}
-                <div className="flex items-center gap-4">
-                  <div className="text-sm text-gray-700">
-                    Showing <span className="font-medium">{((pagination.page - 1) * pagination.limit) + 1}</span> to{" "}
-                    <span className="font-medium">{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of{" "}
-                    <span className="font-medium">{pagination.total}</span> items
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-700">Show:</label>
-                    <select
-                      value={pagination.limit}
-                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                      className="px-2 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Right side: Page navigation */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handlePageChange(pagination.page - 1)}
-                    disabled={pagination.page === 1}
-                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Previous
-                  </button>
-                  
-                  {/* Page numbers */}
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                      let pageNum;
-                      if (pagination.totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (pagination.page <= 3) {
-                        pageNum = i + 1;
-                      } else if (pagination.page >= pagination.totalPages - 2) {
-                        pageNum = pagination.totalPages - 4 + i;
-                      } else {
-                        pageNum = pagination.page - 2 + i;
-                      }
-                      
-                      if (pageNum < 1 || pageNum > pagination.totalPages) return null;
-                      
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => handlePageChange(pageNum)}
-                          className={`min-w-[2.5rem] px-3 py-1 border rounded-md text-sm ${
-                            pageNum === pagination.page
-                              ? "bg-blue-600 text-white border-blue-600"
-                              : "border-gray-300 hover:bg-gray-50"
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  
-                  <button
-                    onClick={() => handlePageChange(pagination.page + 1)}
-                    disabled={pagination.page === pagination.totalPages}
-                    className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
+    <DataTable
+      title="Tests"
+      data={formattedTests}
+      columns={columns}
+      searchPlaceholder="Search tests by title or course..."
+      filters={filters}
+      stats={stats}
+      pagination={pagination}
+      onPageChange={handlePageChange}
+      onPageSizeChange={handlePageSizeChange}
+      onSearchChange={handleSearchChange}
+      onFilterChange={handleFilterChange}
+      onAdd={handleAdd}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+      onView={handleView}
+      serverSide={true}
+    />
   );
 };
 

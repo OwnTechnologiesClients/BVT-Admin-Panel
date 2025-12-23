@@ -57,12 +57,14 @@ const DataTable = ({
       return;
     }
 
-    // Skip if searchTerm is empty (user cleared the search)
-    if (!searchTerm) {
-      return;
-    }
-
     if (serverSide && onSearchChange) {
+      // If search is empty, reset immediately to show all results
+      // Otherwise, debounce the search
+      if (!searchTerm) {
+        onSearchChange("");
+        return;
+      }
+
       const timeoutId = setTimeout(() => {
         onSearchChange(searchTerm);
         // Don't set currentPage here - let the parent handle it via pagination prop

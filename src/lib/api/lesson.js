@@ -6,6 +6,7 @@ import { apiRequest } from '../api';
  * @param {Object} params - Query parameters
  * @param {number} params.page - Page number (default: 1)
  * @param {number} params.limit - Items per page (default: 10)
+ * @param {string} params.search - Search query
  * @param {string} params.chapterId - Filter by chapter ID
  * @param {string} params.courseId - Filter by course ID
  * @param {string} params.sort_column - Sort column (default: 'createdAt')
@@ -16,6 +17,7 @@ export const getAllLessons = async (params = {}) => {
   
   if (params.page) queryParams.append('page', params.page);
   if (params.limit) queryParams.append('limit', params.limit);
+  if (params.search) queryParams.append('search', params.search);
   if (params.chapterId) queryParams.append('chapterId', params.chapterId);
   if (params.courseId) queryParams.append('courseId', params.courseId);
   if (params.sort_column) queryParams.append('sort_column', params.sort_column);

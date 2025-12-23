@@ -7,6 +7,7 @@ import { Badge, Button } from "@/components/ui";
 import { ArrowLeft, Edit, Trash2, Users, Calendar, DollarSign, Clock, Loader2 } from "lucide-react";
 import * as courseAPI from "@/lib/api/course";
 import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
+import CourseStudentsTable from "@/components/courses/CourseStudentsTable";
 
 export default function CourseDetailsPage({ params }) {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function CourseDetailsPage({ params }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState("overview");
 
   // Fetch course data
   useEffect(() => {
@@ -244,114 +246,160 @@ export default function CourseDetailsPage({ params }) {
         </div>
       </div>
 
-      {/* Course Details */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Basic Information */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium text-gray-700">Instructor</label>
-              <p className="text-gray-900">{instructorName}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Max Students</label>
-              <p className="text-gray-900">{courseData.maxStudents || 'N/A'}</p>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-gray-700">Created</label>
-              <p className="text-gray-900">
-                {courseData.createdAt ? new Date(courseData.createdAt).toLocaleDateString() : 'N/A'}
-              </p>
-            </div>
-            {courseData.createdBy && (
-              <div>
-                <label className="text-sm font-medium text-gray-700">Created By</label>
-                <p className="text-gray-900">
-                  {courseData.createdBy.firstName && courseData.createdBy.lastName
-                    ? `${courseData.createdBy.firstName} ${courseData.createdBy.lastName}`
-                    : 'N/A'}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Learning Objectives & Prerequisites */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Learning Objectives</h3>
-          {learningObjectives.length > 0 ? (
-            <ul className="space-y-2 mb-6">
-              {learningObjectives.map((objective, index) => (
-                <li key={index} className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">•</span>
-                  <span className="text-gray-900">{objective}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-gray-500 mb-6">No learning objectives specified</p>
-          )}
-
-          <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6">Prerequisites</h3>
-          {prerequisites.length > 0 ? (
-            <ul className="space-y-2">
-              {prerequisites.map((prereq, index) => (
-                <li key={index} className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">•</span>
-                  <span className="text-gray-900">{prereq}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-gray-500">No prerequisites specified</p>
-          )}
+      {/* Tabs */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === "overview"
+                ? "bg-blue-100 text-blue-600"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab("structure")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === "structure"
+                ? "bg-blue-100 text-blue-600"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Course Structure
+          </button>
+          <button
+            onClick={() => setActiveTab("students")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === "students"
+                ? "bg-blue-100 text-blue-600"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
+          >
+            Registered Students
+          </button>
         </div>
       </div>
 
-      {/* Course Structure */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Structure</h3>
-        {chapters.length > 0 ? (
-          <div className="space-y-4">
-            {chapters.map((chapter) => (
-              <div key={chapter._id || chapter.id} className="border border-gray-200 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      {chapter.title || 'Untitled Chapter'}
-                    </h4>
-                    {chapter.description && (
-                      <p className="text-sm text-gray-600 mt-1">{chapter.description}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {chapter.lessons && chapter.lessons.length > 0 && (
-                      <>
-                        <p className="text-sm text-gray-600">{chapter.lessons.length} lesson(s)</p>
-                      </>
-                    )}
-                  </div>
+      {/* Tab Content */}
+      {activeTab === "overview" && (
+        <>
+          {/* Course Details */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Basic Information */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Instructor</label>
+                  <p className="text-gray-900">{instructorName}</p>
                 </div>
-                {/* Display lessons if available */}
-                {chapter.lessons && chapter.lessons.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <ul className="space-y-2">
-                      {chapter.lessons.map((lesson, lessonIndex) => (
-                        <li key={lesson._id || lesson.id || lessonIndex} className="text-sm text-gray-600">
-                          • {lesson.title || 'Untitled Lesson'}
-                        </li>
-                      ))}
-                    </ul>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Max Students</label>
+                  <p className="text-gray-900">{courseData.maxStudents || 'N/A'}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Created</label>
+                  <p className="text-gray-900">
+                    {courseData.createdAt ? new Date(courseData.createdAt).toLocaleDateString() : 'N/A'}
+                  </p>
+                </div>
+                {courseData.createdBy && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Created By</label>
+                    <p className="text-gray-900">
+                      {courseData.createdBy.firstName && courseData.createdBy.lastName
+                        ? `${courseData.createdBy.firstName} ${courseData.createdBy.lastName}`
+                        : 'N/A'}
+                    </p>
                   </div>
                 )}
               </div>
-            ))}
+            </div>
+
+            {/* Learning Objectives & Prerequisites */}
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Learning Objectives</h3>
+              {learningObjectives.length > 0 ? (
+                <ul className="space-y-2 mb-6">
+                  {learningObjectives.map((objective, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">•</span>
+                      <span className="text-gray-900">{objective}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500 mb-6">No learning objectives specified</p>
+              )}
+
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 mt-6">Prerequisites</h3>
+              {prerequisites.length > 0 ? (
+                <ul className="space-y-2">
+                  {prerequisites.map((prereq, index) => (
+                    <li key={index} className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">•</span>
+                      <span className="text-gray-900">{prereq}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-gray-500">No prerequisites specified</p>
+              )}
+            </div>
           </div>
-        ) : (
-          <p className="text-gray-500">No chapters available for this course</p>
-        )}
-      </div>
+        </>
+      )}
+
+      {activeTab === "structure" && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Course Structure</h3>
+          {chapters.length > 0 ? (
+            <div className="space-y-4">
+              {chapters.map((chapter) => (
+                <div key={chapter._id || chapter.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        {chapter.title || 'Untitled Chapter'}
+                      </h4>
+                      {chapter.description && (
+                        <p className="text-sm text-gray-600 mt-1">{chapter.description}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      {chapter.lessons && chapter.lessons.length > 0 && (
+                        <>
+                          <p className="text-sm text-gray-600">{chapter.lessons.length} lesson(s)</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {/* Display lessons if available */}
+                  {chapter.lessons && chapter.lessons.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <ul className="space-y-2">
+                        {chapter.lessons.map((lesson, lessonIndex) => (
+                          <li key={lesson._id || lesson.id || lessonIndex} className="text-sm text-gray-600">
+                            • {lesson.title || 'Untitled Lesson'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500">No chapters available for this course</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === "students" && (
+        <CourseStudentsTable courseId={id} />
+      )}
     </div>
   );
 }
