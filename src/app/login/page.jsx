@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui";
 import { BaseInput } from "@/components/ui/BaseInput";
@@ -180,6 +181,14 @@ export default function LoginPage() {
               {errors.password && (
                 <div className="text-red-500 text-sm mt-1">{errors.password}</div>
               )}
+              <div className="text-right mt-1">
+                <Link
+                  href="/forgot-password"
+                  className="text-sm text-blue-600 hover:text-blue-500 transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
 
             <Button
