@@ -1,41 +1,70 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Trash2 } from "lucide-react";
+import * as courseAPI from "@/lib/api/course";
+import * as categoryAPI from "@/lib/api/courseCategory";
+import * as instructorAPI from "@/lib/api/instructor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddCoursePage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     title: "",
+    slug: "",
     description: "",
-    categoryId: "",
-    instructorId: "",
+    category: "",
+    instructor: "",
     duration: "",
-    maxStudents: "",
-    isOnline: true,
+    level: "beginner",
     price: "",
-    difficulty: "beginner",
+    originalPrice: "",
+    image: "",
+    isFeatured: false,
+    isOnline: true,
+    maxStudents: 100,
+    status: "draft",
     prerequisites: "",
-    learningObjectives: "",
-    isActive: true
+    learningObjectives: ""
   });
 
   const [errors, setErrors] = useState({});
+  const [categories, setCategories] = useState([]);
+  const [instructors, setInstructors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
 
-  const categories = [
-    { id: 1, name: "Marine Engineering" },
-    { id: 2, name: "Navigation" },
-    { id: 3, name: "Maritime Safety" },
-    { id: 4, name: "Naval Operations" }
-  ];
+  // Fetch categories and instructors
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [categoriesResponse, instructorsResponse] = await Promise.all([
+          categoryAPI.getAllCategories({ limit: 100 }),
+          instructorAPI.getAllInstructors({ limit: 100 })
+        ]);
 
-  const instructors = [
-    { id: 1, name: "Captain John Smith" },
-    { id: 2, name: "Commander Sarah Johnson" },
-    { id: 3, name: "Lieutenant Mike Davis" },
-    { id: 4, name: "Chief Engineer Lisa Brown" }
-  ];
+        if (categoriesResponse.success) {
+          setCategories(categoriesResponse.data || []);
+        }
+
+        if (instructorsResponse.success) {
+          setInstructors(instructorsResponse.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const difficulties = [
     { value: "beginner", label: "Beginner" },
@@ -50,6 +79,15 @@ export default function AddCoursePage() {
       [field]: value
     }));
 
+    // Auto-generate slug from title
+    if (field === 'title') {
+      const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      setFormData(prev => ({
+        ...prev,
+        slug: slug
+      }));
+    }
+
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({
@@ -57,6 +95,41 @@ export default function AddCoursePage() {
         [field]: ""
       }));
     }
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        showError('Invalid File Type', 'Please select an image file');
+        return;
+      }
+      
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showError('File Too Large', 'Image size should be less than 5MB');
+        return;
+      }
+
+      setImageFile(file);
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview("");
+    setFormData(prev => ({
+      ...prev,
+      image: ""
+    }));
   };
 
   const validateForm = () => {
@@ -70,50 +143,112 @@ export default function AddCoursePage() {
       newErrors.description = "Description is required";
     }
 
-    if (!formData.categoryId) {
-      newErrors.categoryId = "Category is required";
+    if (!formData.category) {
+      newErrors.category = "Category is required";
     }
 
-    if (!formData.instructorId) {
-      newErrors.instructorId = "Instructor is required";
+    if (!formData.instructor) {
+      newErrors.instructor = "Instructor is required";
     }
 
     if (!formData.duration.trim()) {
       newErrors.duration = "Duration is required";
     }
 
-    if (!formData.price.trim()) {
-      newErrors.price = "Price is required";
+    const priceValue = typeof formData.price === 'string' ? parseFloat(formData.price) : formData.price;
+    if (!priceValue || priceValue <= 0 || isNaN(priceValue)) {
+      newErrors.price = "Price is required and must be greater than 0";
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      console.log("Course submitted:", formData);
-      // Handle form submission here
-      alert("Course created successfully!");
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Create FormData instead of JSON (like OMS pattern)
+      const formDataObj = new FormData();
+      
+      // Append form fields
+      formDataObj.append('title', formData.title.trim());
+      formDataObj.append('slug', formData.slug.trim() || formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+      formDataObj.append('description', formData.description.trim());
+      formDataObj.append('category', formData.category);
+      formDataObj.append('instructor', formData.instructor);
+      formDataObj.append('duration', formData.duration.trim());
+      formDataObj.append('level', formData.level);
+      formDataObj.append('price', parseFloat(formData.price));
+      if (formData.originalPrice) {
+        formDataObj.append('originalPrice', parseFloat(formData.originalPrice));
+      }
+      formDataObj.append('isFeatured', formData.isFeatured);
+      formDataObj.append('isOnline', formData.isOnline);
+      formDataObj.append('maxStudents', formData.maxStudents || 100);
+      formDataObj.append('status', formData.status);
+      if (formData.prerequisites?.trim()) {
+        formDataObj.append('prerequisites', formData.prerequisites.trim());
+      }
+      // Send learningObjectives as a newline-separated string (backend will parse it)
+      if (formData.learningObjectives) {
+        formDataObj.append('learningObjectives', formData.learningObjectives);
+      }
+      
+      // Append image file if selected
+      if (imageFile) {
+        formDataObj.append('image', imageFile);
+      }
+
+      const response = await courseAPI.createCourse(formDataObj);
+      
+      if (response.success) {
+        showSuccess('Course Created!', 'The course has been created successfully.');
+        setTimeout(() => {
+        router.push('/courses');
+        }, 1500);
+      } else {
+        showError('Failed to Create Course', response.message || 'Failed to create course');
+      }
+    } catch (err) {
+      showError('Error', err.message || 'Failed to create course');
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <PageBreadcrumb 
         pageTitle="Add New Course"
         breadcrumbs={[
-          { label: "Home", href: "/admin/dashboard" },
-          { label: "Courses", href: "/admin/courses" },
-          { label: "Add Course", href: "/admin/courses/add" }
+          { label: "Home", href: "/" },
+          { label: "Courses", href: "/courses" },
+          { label: "Add Course", href: "/courses/add" }
         ]}
       />
 
       {/* Header Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          className="flex items-center gap-2"
+          onClick={() => router.push('/courses')}
+        >
           <ArrowLeft className="w-4 h-4" />
           Back to Courses
         </Button>
@@ -127,7 +262,7 @@ export default function AddCoursePage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Course Title *
+                  Course Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -143,49 +278,55 @@ export default function AddCoursePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category *
+                  Category <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.categoryId}
-                  onChange={(e) => handleInputChange("categoryId", e.target.value)}
+                  value={formData.category}
+                  onChange={(e) => handleInputChange("category", e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.categoryId ? "border-red-500" : "border-gray-300"
+                    errors.category ? "border-red-500" : "border-gray-300"
                   }`}
                 >
                   <option value="">Select a category</option>
                   {categories.map(category => (
-                    <option key={category.id} value={category.id}>
+                    <option key={category._id} value={category._id}>
                       {category.name}
                     </option>
                   ))}
                 </select>
-                {errors.categoryId && <p className="text-red-500 text-sm mt-1">{errors.categoryId}</p>}
+                {errors.category && <p className="text-red-500 text-sm mt-1">{errors.category}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Instructor *
+                  Instructor <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={formData.instructorId}
-                  onChange={(e) => handleInputChange("instructorId", e.target.value)}
+                  value={formData.instructor}
+                  onChange={(e) => handleInputChange("instructor", e.target.value)}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.instructorId ? "border-red-500" : "border-gray-300"
+                    errors.instructor ? "border-red-500" : "border-gray-300"
                   }`}
                 >
                   <option value="">Select an instructor</option>
-                  {instructors.map(instructor => (
-                    <option key={instructor.id} value={instructor.id}>
-                      {instructor.name}
+                  {instructors.map(instructor => {
+                    const user = instructor.userId || {};
+                    const name = user.firstName && user.lastName 
+                      ? `${user.firstName} ${user.lastName}`
+                      : user.username || 'N/A';
+                    return (
+                      <option key={instructor._id} value={instructor._id}>
+                        {name}
                     </option>
-                  ))}
+                    );
+                  })}
                 </select>
-                {errors.instructorId && <p className="text-red-500 text-sm mt-1">{errors.instructorId}</p>}
+                {errors.instructor && <p className="text-red-500 text-sm mt-1">{errors.instructor}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Duration *
+                  Duration <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -201,12 +342,12 @@ export default function AddCoursePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Max Students
+                  Max Students <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
                 <input
                   type="number"
                   value={formData.maxStudents}
-                  onChange={(e) => handleInputChange("maxStudents", parseInt(e.target.value))}
+                  onChange={(e) => handleInputChange("maxStudents", e.target.value === "" ? "" : parseInt(e.target.value))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="50"
                   min="1"
@@ -215,29 +356,50 @@ export default function AddCoursePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price *
+                  Price <span className="text-red-500">*</span>
                 </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-gray-500">$</span>
                 <input
                   type="number"
                   value={formData.price}
-                  onChange={(e) => handleInputChange("price", parseFloat(e.target.value))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  onChange={(e) => handleInputChange("price", e.target.value === "" ? "" : parseFloat(e.target.value))}
+                    className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     errors.price ? "border-red-500" : "border-gray-300"
                   }`}
                   placeholder="299.99"
                   min="0"
                   step="0.01"
                 />
+                </div>
                 {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Difficulty Level
+                  Original Price <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-gray-500">$</span>
+                <input
+                  type="number"
+                  value={formData.originalPrice}
+                  onChange={(e) => handleInputChange("originalPrice", e.target.value === "" ? "" : parseFloat(e.target.value))}
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="399.99"
+                  min="0"
+                  step="0.01"
+                />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Difficulty Level <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
                 <select
-                  value={formData.difficulty}
-                  onChange={(e) => handleInputChange("difficulty", e.target.value)}
+                  value={formData.level}
+                  onChange={(e) => handleInputChange("level", e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
                   {difficulties.map(difficulty => (
@@ -247,13 +409,29 @@ export default function AddCoursePage() {
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Status <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <select
+                  value={formData.status}
+                  onChange={(e) => handleInputChange("status", e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="draft">Draft</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
             </div>
 
             {/* Right Column */}
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description *
+                  Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={formData.description}
@@ -269,27 +447,62 @@ export default function AddCoursePage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Prerequisites
+                  Course Image <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                </label>
+                <div className="space-y-4">
+                  {imagePreview && (
+                    <div className="relative w-full max-w-md">
+                      <img
+                        src={imagePreview}
+                        alt="Course preview"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={removeImage}
+                        className="absolute top-2 right-2 bg-red-600 text-white rounded-full p-2 hover:bg-red-700"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Supported formats: JPG, PNG, GIF. Max size: 5MB
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Prerequisites (one per line) <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
                 <textarea
                   value={formData.prerequisites}
                   onChange={(e) => handleInputChange("prerequisites", e.target.value)}
-                  rows={3}
+                  rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="List any prerequisites..."
+                  placeholder="List any prerequisites...&#10;One prerequisite per line"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Learning Objectives
+                  Learning Objectives (one per line) <span className="text-gray-500 text-xs font-normal">(Optional)</span>
                 </label>
                 <textarea
                   value={formData.learningObjectives}
                   onChange={(e) => handleInputChange("learningObjectives", e.target.value)}
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="What will students learn..."
+                  placeholder="What will students learn...&#10;One objective per line"
                 />
               </div>
 
@@ -310,13 +523,13 @@ export default function AddCoursePage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => handleInputChange("isActive", e.target.checked)}
+                    id="isFeatured"
+                    checked={formData.isFeatured}
+                    onChange={(e) => handleInputChange("isFeatured", e.target.checked)}
                     className="rounded"
                   />
-                  <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                    Active Course
+                  <label htmlFor="isFeatured" className="text-sm font-medium text-gray-700">
+                    Featured Course
                   </label>
                 </div>
               </div>
@@ -325,12 +538,30 @@ export default function AddCoursePage() {
 
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button type="button" variant="outline">
+            <Button 
+              type="button" 
+              variant="outline"
+              onClick={() => router.push('/courses')}
+            >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex items-center gap-2">
+            <Button 
+              type="submit" 
+              variant="primary" 
+              className="flex items-center gap-2"
+              disabled={submitting}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
               <Save className="w-4 h-4" />
               Create Course
+                </>
+              )}
             </Button>
           </div>
         </form>

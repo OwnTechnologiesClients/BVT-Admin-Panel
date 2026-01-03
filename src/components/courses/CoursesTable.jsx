@@ -1,90 +1,215 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import DataTable from "@/components/common/DataTable";
+import * as courseAPI from "@/lib/api/course";
+import * as enrollmentAPI from "@/lib/api/enrollment";
+import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const CoursesTable = () => {
-  const courses = [
-    {
-      id: 1,
-      title: "Advanced Naval Engineering Workshop",
-      instructor: "Commander James Rodriguez",
-      students: 15,
-      status: "Active",
-      type: "Offline",
-      category: "Marine Engineering",
-      duration: "5 days",
-      price: "$2,500",
-      difficulty: "Advanced",
-      createdAt: "2024-01-15"
-    },
-    {
-      id: 2,
-      title: "Maritime Security Operations",
-      instructor: "Captain Michael Thompson",
-      students: 12,
-      status: "Active",
-      type: "Offline",
-      category: "Maritime Safety",
-      duration: "3 days",
-      price: "$1,800",
-      difficulty: "Intermediate",
-      createdAt: "2024-01-20"
-    },
-    {
-      id: 3,
-      title: "Submarine Operations Masterclass",
-      instructor: "Commander Lisa Chen",
-      students: 8,
-      status: "Active",
-      type: "Offline",
-      category: "Submarine Operations",
-      duration: "7 days",
-      price: "$3,200",
-      difficulty: "Advanced",
-      createdAt: "2024-01-25"
-    },
-    {
-      id: 4,
-      title: "Marine Engineering Fundamentals",
-      instructor: "Commander Sarah Johnson",
-      students: 150,
-      status: "Active",
-      type: "Online",
-      category: "Marine Engineering",
-      duration: "8 weeks",
-      price: "$800",
-      difficulty: "Beginner",
-      createdAt: "2024-02-01"
-    },
-    {
-      id: 5,
-      title: "Naval Architecture Principles",
-      instructor: "Captain David Wilson",
-      students: 25,
-      status: "Draft",
-      type: "Online",
-      category: "Marine Engineering",
-      duration: "6 weeks",
-      price: "$1,200",
-      difficulty: "Intermediate",
-      createdAt: "2024-02-05"
-    },
-    {
-      id: 6,
-      title: "Navigation Systems & GPS",
-      instructor: "Lieutenant Commander Alex Brown",
-      students: 45,
-      status: "Active",
-      type: "Hybrid",
-      category: "Navigation",
-      duration: "4 weeks",
-      price: "$1,500",
-      difficulty: "Intermediate",
-      createdAt: "2024-02-10"
+  const router = useRouter();
+  const [courses, setCourses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+  const [stats, setStats] = useState({
+    totalCourses: 0,
+    activeCourses: 0,
+    avgPrice: 0
+  });
+  const [enrollmentCounts, setEnrollmentCounts] = useState({});
+  const isInitialMount = useRef(true);
+  const hasInitialFetch = useRef(false);
+
+  // Fetch courses with server-side pagination (Oasis pattern)
+  // Supports lightweight search without triggering full table loading state
+  const fetchCourses = useCallback(async (page, limit, search, status, category, type, options = {}) => {
+    const { skipLoading = false } = options;
+    try {
+      if (!skipLoading) setLoading(true);
+      setError(null);
+      
+      const params = {
+        page,
+        limit,
+        sort_column: 'createdAt',
+        sort_direction: 'desc',
+        ...(search && { search }),
+        ...(status && { status: status.toLowerCase() }),
+        ...(category && { category }),
+        ...(type && { isOnline: type === "Online" ? "true" : "false" })
+      };
+
+      const response = await courseAPI.getAllCourses(params);
+      if (response.success) {
+        const coursesData = response.data || [];
+        setCourses(coursesData);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
+        
+        // Fetch enrollment counts for the current page of courses
+        if (coursesData.length > 0) {
+          fetchEnrollmentCounts(coursesData.map(c => c._id || c.id));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching courses:', err);
+      const errorMsg = err.message || 'Failed to fetch courses';
+      setError(errorMsg);
+      showError('Error Loading Courses', errorMsg);
+    } finally {
+      if (!skipLoading) setLoading(false);
     }
-  ];
+  }, []);
+
+  // Fetch enrollment counts for specific courses
+  const fetchEnrollmentCounts = useCallback(async (courseIds) => {
+    try {
+      // Fetch all enrollments and count by courseId
+      const response = await enrollmentAPI.getAllEnrollments({ limit: 10000 });
+      if (response.success) {
+        const enrollments = response.data?.enrollments || response.data || [];
+        const counts = {};
+        
+        enrollments.forEach(enrollment => {
+          let courseId = null;
+          if (enrollment.courseId) {
+            // Handle both populated and unpopulated courseId
+            if (enrollment.courseId._id) {
+              courseId = enrollment.courseId._id.toString();
+            } else if (enrollment.courseId.toString && typeof enrollment.courseId.toString === 'function') {
+              courseId = enrollment.courseId.toString();
+            } else if (typeof enrollment.courseId === 'string') {
+              courseId = enrollment.courseId;
+            }
+          }
+          
+          if (courseId && courseIds.includes(courseId)) {
+            counts[courseId] = (counts[courseId] || 0) + 1;
+          }
+        });
+        
+        setEnrollmentCounts(prev => ({ ...prev, ...counts }));
+      }
+    } catch (err) {
+      console.error('Error fetching enrollment counts:', err);
+    }
+  }, []);
+
+  // Fetch stats and calculate average price from all courses
+  const fetchStats = async () => {
+    try {
+      const [statsResponse, allCoursesResponse] = await Promise.all([
+        courseAPI.getCourseStats(),
+        courseAPI.getAllCourses({ limit: 10000 }) // Fetch all courses to calculate avg price
+      ]);
+      
+      if (statsResponse.success && statsResponse.data) {
+        // Calculate average price from all courses
+        let avgPrice = 0;
+        if (allCoursesResponse.success && allCoursesResponse.data && allCoursesResponse.data.length > 0) {
+          const totalPrice = allCoursesResponse.data.reduce((sum, course) => {
+            return sum + (course.price || 0);
+          }, 0);
+          avgPrice = totalPrice / allCoursesResponse.data.length;
+        }
+        
+        setStats({
+          totalCourses: statsResponse.data.totalCourses || 0,
+          activeCourses: statsResponse.data.activeCourses || 0,
+          avgPrice: avgPrice
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching stats:', err);
+    }
+  };
+
+  // Initial fetch - only run once even in Strict Mode
+  useEffect(() => {
+    if (hasInitialFetch.current) return;
+    hasInitialFetch.current = true;
+    fetchCourses(1, 10, "", "", "", "");
+    fetchStats();
+    // Mark initial mount as complete after a short delay to allow other effects to skip
+    const timer = setTimeout(() => {
+      isInitialMount.current = false;
+    }, 100);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Handle search change from DataTable
+  const handleSearchChange = useCallback((search) => {
+    setSearchTerm(search);
+    fetchCourses(1, pagination.limit, search, statusFilter, "", typeFilter);
+  }, [fetchCourses, pagination.limit, statusFilter, typeFilter]);
+
+  // Handle filter change from DataTable
+  const handleFilterChange = useCallback((filters) => {
+    const newStatusFilter = filters.status || "";
+    const newTypeFilter = filters.type || "";
+    
+    setStatusFilter(newStatusFilter);
+    setTypeFilter(newTypeFilter);
+    
+    fetchCourses(1, pagination.limit, searchTerm, newStatusFilter, "", newTypeFilter);
+  }, [fetchCourses, pagination.limit, searchTerm]);
+
+  // Handle page change
+  const handlePageChange = useCallback((newPage) => {
+    fetchCourses(newPage, pagination.limit, searchTerm, statusFilter, "", typeFilter);
+  }, [fetchCourses, pagination.limit, searchTerm, statusFilter, typeFilter]);
+
+  // Handle page size change
+  const handlePageSizeChange = useCallback((newPageSize) => {
+    fetchCourses(1, newPageSize, searchTerm, statusFilter, "", typeFilter);
+  }, [fetchCourses, searchTerm, statusFilter, typeFilter]);
+
+  // Format course data for display
+  const formatCourses = (courses) => {
+    return courses.map(course => {
+      const instructor = course.instructor?.userId || {};
+      const instructorName = instructor.firstName && instructor.lastName
+        ? `${instructor.firstName} ${instructor.lastName}`
+        : instructor.username || 'N/A';
+      
+      const courseId = course._id || course.id;
+      const studentCount = enrollmentCounts[courseId] || 0;
+      
+      return {
+        id: courseId,
+        title: course.title,
+        instructor: instructorName,
+        students: studentCount,
+        status: course.status || 'draft',
+        type: course.isOnline ? 'Online' : 'Offline',
+        category: course.category?.name || 'N/A',
+        duration: course.duration || 'N/A',
+        price: `$${course.price || 0}`,
+        difficulty: course.level || 'beginner',
+        createdAt: course.createdAt
+      };
+    });
+  };
+
+  const formattedCourses = formatCourses(courses);
 
   const columns = [
     {
@@ -127,11 +252,12 @@ const CoursesTable = () => {
       label: "Status",
       render: (value) => {
         const colors = {
-          "Active": "success",
-          "Draft": "warning",
-          "Inactive": "error"
+          "active": "success",
+          "draft": "warning",
+          "inactive": "error"
         };
-        return <Badge color={colors[value] || "default"}>{value}</Badge>;
+        const displayValue = value.charAt(0).toUpperCase() + value.slice(1);
+        return <Badge color={colors[value] || "default"}>{displayValue}</Badge>;
       }
     },
     {
@@ -141,50 +267,27 @@ const CoursesTable = () => {
     }
   ];
 
-  const filters = [
-    {
-      key: "category",
-      label: "Categories",
-      options: ["Marine Engineering", "Navigation", "Maritime Safety", "Naval Operations", "Submarine Operations"]
-    },
-    {
-      key: "status",
-      label: "Status",
-      options: ["Active", "Draft", "Inactive"]
-    },
-    {
-      key: "type",
-      label: "Type",
-      options: ["Online", "Offline", "Hybrid"]
-    }
-  ];
+  const filters = [];
 
-  const stats = [
+  const computedStats = [
     {
       label: "Total Courses",
-      value: courses.length,
+      value: stats.totalCourses || pagination.total || 0,
       icon: "C",
       bgColor: "bg-blue-100",
       iconColor: "text-blue-600"
     },
     {
       label: "Active Courses",
-      value: courses.filter(c => c.status === "Active").length,
+      value: stats.activeCourses || 0,
       icon: "✓",
       bgColor: "bg-green-100",
       iconColor: "text-green-600",
       color: "text-green-600"
     },
     {
-      label: "Total Students",
-      value: courses.reduce((sum, course) => sum + course.students, 0),
-      icon: "👥",
-      bgColor: "bg-purple-100",
-      iconColor: "text-purple-600"
-    },
-    {
       label: "Avg. Price",
-      value: `$${Math.round(courses.reduce((sum, course) => sum + parseInt(course.price.replace('$', '')), 0) / courses.length)}`,
+      value: stats.avgPrice ? `$${Math.round(stats.avgPrice)}` : "$0",
       icon: "$",
       bgColor: "bg-yellow-100",
       iconColor: "text-yellow-600"
@@ -192,36 +295,74 @@ const CoursesTable = () => {
   ];
 
   const handleAdd = () => {
-    window.location.href = "/admin/courses/add";
+    router.push("/courses/add");
   };
 
   const handleEdit = (course) => {
-    window.location.href = `/admin/courses/update/${course.id}`;
+    router.push(`/courses/update/${course.id}`);
   };
 
-  const handleDelete = (course) => {
-    if (confirm(`Are you sure you want to delete "${course.title}"?`)) {
-      console.log("Delete course:", course);
+  const handleDelete = async (course) => {
+    const result = await showDeleteConfirm(
+      `Delete "${course.title}"?`,
+      'This action cannot be undone. All course data will be permanently deleted.'
+    );
+    
+    if (result.isConfirmed) {
+      try {
+        const response = await courseAPI.deleteCourse(course.id);
+        if (response.success) {
+          showSuccess('Course Deleted!', `"${course.title}" has been deleted successfully.`);
+          // Refresh current page
+          await fetchCourses(pagination.page, pagination.limit, searchTerm, statusFilter, "", typeFilter);
+          await fetchStats();
+        } else {
+          showError('Delete Failed', response.message || 'Failed to delete course');
+        }
+      } catch (err) {
+        showError('Error', err.message || 'Failed to delete course');
+      }
     }
   };
 
   const handleView = (course) => {
-    window.location.href = `/admin/courses/details/${course.id}`;
+    router.push(`/courses/details/${course.id}`);
   };
+
+  if (loading && courses.length === 0) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-600">Loading courses...</p>
+      </div>
+    );
+  }
+
+  if (error && courses.length === 0) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-600">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <DataTable
-      title="Courses Management"
-      description="Manage and monitor all training courses"
-      data={courses}
+      title="Courses"
+      data={formattedCourses}
       columns={columns}
+      searchPlaceholder="Search courses by title, instructor, or category..."
       filters={filters}
-      stats={stats}
-      searchPlaceholder="Search courses by title or instructor..."
+      stats={computedStats}
+      pagination={pagination}
+      onPageChange={handlePageChange}
+      onPageSizeChange={handlePageSizeChange}
+      onSearchChange={handleSearchChange}
+      onFilterChange={handleFilterChange}
       onAdd={handleAdd}
       onEdit={handleEdit}
       onDelete={handleDelete}
       onView={handleView}
+      serverSide={true}
     />
   );
 };

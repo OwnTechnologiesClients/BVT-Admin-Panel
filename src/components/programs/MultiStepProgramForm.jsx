@@ -1,11 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Switch } from "@/components/ui";
-import { Plus, Trash2, Save, ArrowLeft, ArrowRight, GraduationCap, Users, Award, Calendar } from "lucide-react";
+import { Plus, Trash2, Save, ArrowLeft, ArrowRight, GraduationCap, Users, Award, Calendar, Loader2 } from "lucide-react";
+import * as programAPI from "@/lib/api/program";
+import * as categoryAPI from "@/lib/api/courseCategory";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
-const MultiStepProgramForm = () => {
+const MultiStepProgramForm = ({ initialData = null, isEdit = false }) => {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     // Step 1: Basic Information
     title: "",
@@ -36,8 +44,7 @@ const MultiStepProgramForm = () => {
             id: 1,
             title: "",
             description: "",
-            duration: "",
-            type: "lecture"
+            duration: ""
           }
         ]
       }
@@ -47,6 +54,69 @@ const MultiStepProgramForm = () => {
   });
 
   const totalSteps = 3;
+
+  // Fetch categories and initial data
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch categories
+        const categoriesResponse = await categoryAPI.getAllCategories({ limit: 100 });
+        if (categoriesResponse.success) {
+          setCategories(categoriesResponse.data || []);
+        }
+
+        // If editing, fetch program data
+        if (isEdit && initialData?.id) {
+          setLoading(true);
+          const programResponse = await programAPI.getProgramById(initialData.id);
+          if (programResponse.success) {
+            const program = programResponse.data;
+            setFormData({
+              title: program.title || "",
+              description: program.description || "",
+              category: program.category?._id || program.category || "",
+              programDirector: program.programDirector || "",
+              duration: program.duration || "",
+              maxParticipants: program.maxParticipants?.toString() || "",
+              isOnline: program.isOnline || false,
+              startDate: program.startDate ? new Date(program.startDate).toISOString().split('T')[0] : "",
+              endDate: program.endDate ? new Date(program.endDate).toISOString().split('T')[0] : "",
+              cost: program.cost?.toString() || "",
+              difficulty: program.difficulty || "",
+              prerequisites: program.prerequisites || "",
+              graduationRequirements: program.graduationRequirements || "",
+              modules: program.modules 
+                ? program.modules.map((module, idx) => ({
+                    id: module.id || idx + 1,
+                    title: module.title || "",
+                    description: module.description || "",
+                    duration: module.duration || "",
+                    lessons: module.lessons 
+                      ? module.lessons.map((lesson, lidx) => ({
+                          id: lesson.id || lidx + 1,
+                          title: lesson.title || "",
+                          description: lesson.description || "",
+                          duration: lesson.duration || ""
+                        }))
+                      : [{ id: 1, title: "", description: "", duration: "" }]
+                  }))
+                : [{ id: 1, title: "", description: "", duration: "", lessons: [{ id: 1, title: "", description: "", duration: "" }] }],
+              skills: program.skills || ["Leadership", "Technical Skills"],
+              certifications: Array.isArray(program.certifications) ? program.certifications.join(', ') : (program.certifications || "")
+            });
+          }
+        } else if (initialData) {
+          // Use provided initial data
+          setFormData(prev => ({ ...prev, ...initialData }));
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [isEdit, initialData]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -84,8 +154,7 @@ const MultiStepProgramForm = () => {
           id: 1,
           title: "",
           description: "",
-          duration: "",
-          type: "lecture"
+          duration: ""
         }
       ]
     };
@@ -111,8 +180,7 @@ const MultiStepProgramForm = () => {
       id: updatedModules[moduleIndex].lessons.length + 1,
       title: "",
       description: "",
-      duration: "",
-      type: "lecture"
+      duration: ""
     };
     updatedModules[moduleIndex].lessons.push(newLesson);
     setFormData(prev => ({
@@ -150,22 +218,153 @@ const MultiStepProgramForm = () => {
     }));
   };
 
-  const nextStep = () => {
+  const nextStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     }
   };
 
-  const prevStep = () => {
+  const prevStep = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     if (currentStep > 1) {
       setCurrentStep(currentStep - 1);
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Program submitted:", formData);
-    // Handle form submission here
+    
+    try {
+      setSubmitting(true);
+      
+      // Prepare program data for API
+      // Clean modules: remove id fields and filter out empty lessons
+      const cleanModules = formData.modules
+        .filter(module => module.title && module.title.trim()) // Only include modules with titles
+        .map(module => ({
+          title: module.title.trim(),
+          description: module.description?.trim() || '',
+          duration: module.duration?.trim() || '',
+          lessons: (module.lessons || [])
+            .filter(lesson => lesson.title && lesson.title.trim()) // Only include lessons with titles
+            .map(lesson => ({
+              title: lesson.title.trim(),
+              description: lesson.description?.trim() || '',
+              duration: lesson.duration?.trim() || ''
+            }))
+        }))
+        .filter(module => module.lessons.length > 0); // Only include modules with at least one lesson
+
+      // Validate required fields
+      if (!formData.title || !formData.title.trim()) {
+        showError('Validation Error', 'Program title is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.category) {
+        showError('Validation Error', 'Category is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.programDirector || !formData.programDirector.trim()) {
+        showError('Validation Error', 'Program director is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.duration || !formData.duration.trim()) {
+        showError('Validation Error', 'Duration is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.startDate) {
+        showError('Validation Error', 'Start date is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.endDate) {
+        showError('Validation Error', 'End date is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.difficulty) {
+        showError('Validation Error', 'Difficulty level is required');
+        setSubmitting(false);
+        return;
+      }
+      if (!formData.graduationRequirements || !formData.graduationRequirements.trim()) {
+        showError('Validation Error', 'Graduation requirements are required');
+        setSubmitting(false);
+        return;
+      }
+      if (cleanModules.length === 0) {
+        showError('Validation Error', 'At least one module with lessons is required');
+        setSubmitting(false);
+        return;
+      }
+
+      const programData = {
+        title: formData.title.trim(),
+        description: formData.description?.trim() || '',
+        category: formData.category,
+        programDirector: formData.programDirector.trim(),
+        duration: formData.duration.trim(),
+        maxParticipants: formData.maxParticipants && formData.maxParticipants.trim() 
+          ? parseInt(formData.maxParticipants) 
+          : undefined,
+        isOnline: formData.isOnline || false,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        cost: formData.cost && formData.cost.trim() 
+          ? parseFloat(formData.cost) 
+          : 0,
+        difficulty: formData.difficulty,
+        prerequisites: formData.prerequisites && formData.prerequisites.trim() 
+          ? formData.prerequisites.trim() 
+          : undefined,
+        graduationRequirements: formData.graduationRequirements.trim(),
+        certifications: formData.certifications && formData.certifications.trim()
+          ? formData.certifications.split(',').map(c => c.trim()).filter(c => c)
+          : [],
+        skills: Array.isArray(formData.skills) && formData.skills.length > 0
+          ? formData.skills.filter(s => s && s.trim())
+          : [],
+        modules: cleanModules
+      };
+
+      let response;
+      if (isEdit && initialData?.id) {
+        response = await programAPI.updateProgram(initialData.id, programData);
+      } else {
+        response = await programAPI.createProgram(programData);
+      }
+      
+      if (response.success) {
+        showSuccess(
+          isEdit ? 'Program Updated!' : 'Program Created!',
+          `The program has been ${isEdit ? 'updated' : 'created'} successfully.`
+        );
+        setTimeout(() => {
+        router.push('/programs');
+        }, 1500);
+      } else {
+        const errorMessage = response.message || response.error || `Failed to ${isEdit ? 'update' : 'create'} program`;
+        console.error('Program API error:', response);
+        showError('Error', errorMessage);
+      }
+    } catch (err) {
+      console.error('Program submission error:', err);
+      const errorMessage = err.message || err.response?.data?.message || 'Failed to save program. Please check the console for details.';
+      showError('Error', errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStep1 = () => (
@@ -175,7 +374,7 @@ const MultiStepProgramForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Program Title *
+            Program Title <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -189,7 +388,7 @@ const MultiStepProgramForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Category *
+            Category <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.category}
@@ -198,17 +397,17 @@ const MultiStepProgramForm = () => {
             required
           >
             <option value="">Select category</option>
-            <option value="marine-engineering">Marine Engineering</option>
-            <option value="navigation">Navigation</option>
-            <option value="maritime-safety">Maritime Safety</option>
-            <option value="naval-operations">Naval Operations</option>
-            <option value="submarine-operations">Submarine Operations</option>
+            {categories.map(category => (
+              <option key={category._id} value={category._id}>
+                {category.name}
+              </option>
+            ))}
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Program Director *
+            Program Director <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -222,7 +421,7 @@ const MultiStepProgramForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Duration *
+            Duration <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
@@ -236,7 +435,7 @@ const MultiStepProgramForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Maximum Participants
+            Maximum Participants <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <input
             type="number"
@@ -260,7 +459,7 @@ const MultiStepProgramForm = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Description *
+          Description <span className="text-red-500">*</span>
         </label>
         <textarea
           value={formData.description}
@@ -281,7 +480,7 @@ const MultiStepProgramForm = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Start Date *
+            Start Date <span className="text-red-500">*</span>
           </label>
           <input
             type="date"
@@ -294,7 +493,7 @@ const MultiStepProgramForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            End Date *
+            End Date <span className="text-red-500">*</span>
           </label>
           <input
             type="date"
@@ -307,20 +506,25 @@ const MultiStepProgramForm = () => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Program Cost
+            Program Cost <span className="text-gray-400 text-xs">(optional)</span>
           </label>
-          <input
-            type="number"
-            value={formData.cost}
-            onChange={(e) => handleInputChange("cost", e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter program cost"
-          />
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+            <input
+              type="number"
+              value={formData.cost}
+              onChange={(e) => handleInputChange("cost", e.target.value)}
+              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+            />
+          </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Difficulty Level *
+            Difficulty Level <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.difficulty}
@@ -338,7 +542,7 @@ const MultiStepProgramForm = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Prerequisites
+          Prerequisites <span className="text-gray-400 text-xs">(optional)</span>
         </label>
         <textarea
           value={formData.prerequisites}
@@ -351,7 +555,7 @@ const MultiStepProgramForm = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Graduation Requirements *
+          Graduation Requirements <span className="text-red-500">*</span>
         </label>
         <textarea
           value={formData.graduationRequirements}
@@ -365,7 +569,7 @@ const MultiStepProgramForm = () => {
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Certifications
+          Certifications <span className="text-gray-400 text-xs">(optional)</span>
         </label>
         <textarea
           value={formData.certifications}
@@ -414,7 +618,7 @@ const MultiStepProgramForm = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Module Title *
+                Module Title <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -428,7 +632,7 @@ const MultiStepProgramForm = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Duration *
+                Duration <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -443,7 +647,7 @@ const MultiStepProgramForm = () => {
 
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Module Description *
+              Module Description <span className="text-red-500">*</span>
             </label>
             <textarea
               value={module.description}
@@ -488,10 +692,10 @@ const MultiStepProgramForm = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Title *
+                      Title <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -505,7 +709,7 @@ const MultiStepProgramForm = () => {
 
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Duration *
+                      Duration <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
@@ -516,28 +720,11 @@ const MultiStepProgramForm = () => {
                       required
                     />
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Type *
-                    </label>
-                    <select
-                      value={lesson.type}
-                      onChange={(e) => handleLessonChange(moduleIndex, lessonIndex, "type", e.target.value)}
-                      className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      required
-                    >
-                      <option value="lecture">Lecture</option>
-                      <option value="practical">Practical</option>
-                      <option value="workshop">Workshop</option>
-                      <option value="assessment">Assessment</option>
-                    </select>
-                  </div>
                 </div>
 
                 <div className="mt-3">
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Description *
+                    Description <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={lesson.description}
@@ -621,7 +808,24 @@ const MultiStepProgramForm = () => {
         </span>
       </div>
 
-      <form onSubmit={handleSubmit}>
+      <form 
+        onSubmit={(e) => {
+          // Only submit on the last step
+          if (currentStep === totalSteps) {
+            handleSubmit(e);
+          } else {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+        onKeyDown={(e) => {
+          // Prevent Enter key from submitting form unless on last step
+          if (e.key === 'Enter' && currentStep < totalSteps) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }}
+      >
         {currentStep === 1 && renderStep1()}
         {currentStep === 2 && renderStep2()}
         {currentStep === 3 && renderStep3()}
@@ -655,9 +859,19 @@ const MultiStepProgramForm = () => {
                 type="submit"
                 variant="primary"
                 className="flex items-center gap-2"
+                disabled={submitting}
               >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
                 <Save className="w-4 h-4" />
-                Create Program
+                {isEdit ? 'Update Program' : 'Create Program'}
+                  </>
+                )}
               </Button>
             )}
           </div>

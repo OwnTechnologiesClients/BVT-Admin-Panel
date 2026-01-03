@@ -120,7 +120,6 @@ const StudentsTab = ({ students = [] }) => {
               <tr key={student.id} className="hover:bg-gray-50/60">
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">
                   <div className="font-semibold">{student.name}</div>
-                  <div className="text-xs text-gray-500">{student.rank}</div>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-700">
                   <div className="flex items-center gap-3">

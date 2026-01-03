@@ -10,7 +10,6 @@ const LessonContentManager = ({ lessonId }) => {
       id: 1,
       title: "Introduction Video",
       description: "Course introduction video",
-      order: 1,
       video: {
         filePath: "/uploads/videos/intro.mp4",
         fileName: "intro.mp4",
@@ -30,7 +29,6 @@ const LessonContentManager = ({ lessonId }) => {
       id: contents.length + 1,
       title: "",
       description: "",
-      order: contents.length + 1,
       video: null,
       document: null,
       isRequired: true,

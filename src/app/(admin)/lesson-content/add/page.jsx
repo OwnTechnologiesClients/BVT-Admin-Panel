@@ -1,70 +1,114 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
-import { Button } from "@/components/ui";
-import { ArrowLeft, Save, Upload, Video, FileText } from "lucide-react";
+import RichTextEditor from "@/components/common/RichTextEditor";
+import { Button, SearchableSelect } from "@/components/ui";
+import { ArrowLeft, Save, Upload, Video, FileText, Loader2 } from "lucide-react";
+import * as lessonContentAPI from "@/lib/api/lessonContent";
+import * as courseAPI from "@/lib/api/course";
+import * as chapterAPI from "@/lib/api/chapter";
+import * as lessonAPI from "@/lib/api/lesson";
+import { extractTextFromPDF, getPDFPageCount } from "@/lib/utils/pdfExtractor";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 
 export default function AddLessonContentPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     courseId: "",
     chapterId: "",
     lessonId: "",
     title: "",
+    description: "",
     video: {
+      type: "upload", // "upload" or "youtube"
+      file: null,
       filePath: "",
       fileName: "",
-      duration: ""
+      duration: "",
+      youtubeUrl: ""
     },
     document: {
+      file: null,
       filePath: "",
       fileName: "",
       extractedText: "",
       pageCount: ""
     },
-    isRequired: true,
     isActive: true
   });
 
   const [errors, setErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(1);
-  const editorRef = React.useRef(null);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [extractingPDF, setExtractingPDF] = useState(false);
+  const [courses, setCourses] = useState([]);
+  const [chapters, setChapters] = useState([]);
+  const [lessons, setLessons] = useState([]);
 
-  // Courses data
-  const courses = [
-    { id: 1, name: "Advanced Naval Engineering Workshop" },
-    { id: 2, name: "Maritime Security Operations" },
-    { id: 3, name: "Submarine Operations Masterclass" }
-  ];
+  // Fetch courses on mount
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        setLoading(true);
+        const response = await courseAPI.getAllCourses({ limit: 100 });
+        if (response.success) {
+          setCourses(response.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching courses:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCourses();
+  }, []);
 
-  // Chapters data
-  const chapters = [
-    { id: 1, name: "Getting Started", courseId: 1 },
-    { id: 2, name: "Ship Propulsion Systems", courseId: 1 },
-    { id: 3, name: "Advanced Propulsion", courseId: 1 },
-    { id: 4, name: "Security Fundamentals", courseId: 2 },
-    { id: 5, name: "Threat Assessment", courseId: 2 },
-    { id: 6, name: "Introduction to Submarines", courseId: 3 },
-    { id: 7, name: "Underwater Navigation", courseId: 3 }
-  ];
+  // Fetch chapters when course is selected
+  useEffect(() => {
+    const fetchChapters = async () => {
+      if (!formData.courseId) {
+        setChapters([]);
+        return;
+      }
+      try {
+        setLoading(true);
+        const response = await chapterAPI.getChaptersByCourse(formData.courseId);
+        if (response.success) {
+          setChapters(response.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching chapters:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchChapters();
+  }, [formData.courseId]);
 
-  // Lessons data
-  const allLessons = [
-    { id: 1, name: "Course Overview", chapterId: 1 },
-    { id: 2, name: "Introduction to Naval Engineering", chapterId: 1 },
-    { id: 3, name: "Propulsion System Components", chapterId: 2 },
-    { id: 4, name: "Security Best Practices", chapterId: 4 },
-    { id: 5, name: "Submarine Basics", chapterId: 6 }
-  ];
-
-  // Filter chapters and lessons based on selections
-  const filteredChapters = formData.courseId 
-    ? chapters.filter(chapter => chapter.courseId === parseInt(formData.courseId))
-    : [];
-
-  const filteredLessons = formData.chapterId 
-    ? allLessons.filter(lesson => lesson.chapterId === parseInt(formData.chapterId))
-    : [];
+  // Fetch lessons when chapter is selected
+  useEffect(() => {
+    const fetchLessons = async () => {
+      if (!formData.chapterId) {
+        setLessons([]);
+        return;
+      }
+      try {
+        setLoading(true);
+        const response = await lessonAPI.getLessonsByChapter(formData.chapterId);
+        if (response.success) {
+          setLessons(response.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching lessons:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLessons();
+  }, [formData.chapterId]);
 
   const handleInputChange = (field, value) => {
     // Reset dependent fields when course or chapter changes
@@ -117,31 +161,129 @@ export default function AddLessonContentPage() {
     }));
   };
 
-  const executeCommand = (command, value = null) => {
-    document.execCommand(command, false, value);
-  };
-
-  const handleFormatClick = (command, value = null) => {
-    executeCommand(command, value);
+  // Convert plain text to HTML format for Tiptap editor
+  // Preserves the original structure better
+  const convertTextToHTML = (text) => {
+    if (!text) return "";
+    
+    // Split into lines
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    
+    if (lines.length === 0) return "";
+    
+    let html = '';
+    let inList = false;
+    let currentParagraph = [];
+    
+    lines.forEach((line, index) => {
+      const nextLine = lines[index + 1];
+      const prevLine = lines[index - 1];
+      
+      // Detect if this is a list item (bullet or numbered)
+      const isListItem = /^[\u2022\u2023\u25E6\u2043\u2219\-\*\•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line);
+      
+      // Detect if this is likely a heading (short line, maybe all caps, followed by longer text)
+      const isLikelyHeading = line.length < 80 && 
+                             (line.toUpperCase() === line || /^[A-Z]/.test(line)) &&
+                             nextLine && nextLine.length > line.length * 2;
+      
+      if (isListItem) {
+        // Close previous paragraph if exists
+        if (currentParagraph.length > 0) {
+          html += `<p>${currentParagraph.join(' ')}</p>`;
+          currentParagraph = [];
+        }
+        
+        // Start or continue list
+        if (!inList) {
+          html += '<ul>';
+          inList = true;
+        }
+        
+        // Extract list item text (remove bullet/number)
+        const itemText = line.replace(/^[\u2022\u2023\u25E6\u2043\u2219\-\*\•\d+\.\)]\s+/, '').trim();
+        html += `<li>${itemText}</li>`;
+        
+        // Close list only if next line is not a list item and we're moving to a different section
+        const nextIsListItem = nextLine && (/^[\u2022\u2023\u25E6\u2043\u2219\-\*\•]\s+/.test(nextLine) || /^\d+[\.\)]\s+/.test(nextLine));
+        if (!nextLine || (!nextIsListItem && nextLine.trim().length > 0)) {
+          html += '</ul>';
+          inList = false;
+        }
+      } else if (isLikelyHeading) {
+        // Close previous paragraph
+        if (currentParagraph.length > 0) {
+          html += `<p>${currentParagraph.join(' ')}</p>`;
+          currentParagraph = [];
+        }
+        html += `<h2>${line}</h2>`;
+      } else {
+        // Regular text line
+        // Close list if we were in one
+        if (inList) {
+          html += '</ul>';
+          inList = false;
+        }
+        
+        // Add to current paragraph
+        currentParagraph.push(line);
+        
+        // Check if we should close paragraph:
+        // - Next line is empty or very different in length (might be new section)
+        // - Current line ends with punctuation and next line starts with capital
+        const shouldCloseParagraph = 
+          !nextLine || 
+          (line.match(/[.!?:;]$/) && nextLine && /^[A-Z]/.test(nextLine)) ||
+          (currentParagraph.length > 0 && (!nextLine || nextLine.length < 50));
+        
+        if (shouldCloseParagraph && currentParagraph.length > 0) {
+          html += `<p>${currentParagraph.join(' ')}</p>`;
+          currentParagraph = [];
+        }
+      }
+    });
+    
+    // Close any remaining paragraph
+    if (currentParagraph.length > 0) {
+      html += `<p>${currentParagraph.join(' ')}</p>`;
+    }
+    
+    // Close any remaining list
+    if (inList) {
+      html += '</ul>';
+    }
+    
+    return html || `<p>${text.replace(/\n/g, ' ')}</p>`;
   };
 
   const extractPDFText = async (file) => {
-    // Note: This is a placeholder. For full PDF text extraction, 
-    // you'll need to integrate a library like pdf.js or pdf-parse
-    // For now, we'll show a message that text extraction is in progress
-    handleDocumentChange("extractedText", "Loading PDF content...\n\nNote: PDF text extraction requires a backend service or client-side library like pdf.js. The file has been selected and ready for upload.");
+    if (!file || file.type !== "application/pdf") {
+      return;
+    }
+
+    try {
+      setExtractingPDF(true);
+      
+      // Extract text and page count in parallel
+      const [extractedText, pageCount] = await Promise.all([
+        extractTextFromPDF(file),
+        getPDFPageCount(file)
+      ]);
     
-    // Example: If using pdf.js, you would do something like:
-    // const pdfjsLib = await import('pdfjs-dist');
-    // const fileArrayBuffer = await file.arrayBuffer();
-    // const pdf = await pdfjsLib.getDocument({ data: fileArrayBuffer }).promise;
-    // let fullText = '';
-    // for (let i = 1; i <= pdf.numPages; i++) {
-    //   const page = await pdf.getPage(i);
-    //   const textContent = await page.getTextContent();
-    //   fullText += textContent.items.map(item => item.str).join(' ') + '\n';
-    // }
-    // handleDocumentChange("extractedText", fullText);
+      // Convert plain text to HTML format for Tiptap editor
+      const htmlContent = convertTextToHTML(extractedText);
+
+      // Update form data with extracted text (as HTML) and page count
+      handleDocumentChange("extractedText", htmlContent);
+      handleDocumentChange("pageCount", pageCount.toString());
+    } catch (error) {
+      console.error("Error extracting PDF:", error);
+      showError('PDF Extraction Error', `Failed to extract text from PDF: ${error.message}`);
+      // Set a placeholder message
+      handleDocumentChange("extractedText", `<p>Error: Could not extract text from PDF. ${error.message}</p>`);
+    } finally {
+      setExtractingPDF(false);
+    }
   };
 
   const validateForm = () => {
@@ -164,26 +306,117 @@ export default function AddLessonContentPage() {
     }
 
     // Video is always required (Step 1)
+    // Validate video based on type
+    if (formData.video.type === "upload") {
     if (!formData.video.file && !formData.video.filePath) {
       newErrors.videoFile = "Video file is required";
+      }
+    } else if (formData.video.type === "youtube") {
+      if (!formData.video.youtubeUrl || !formData.video.youtubeUrl.trim()) {
+        newErrors.youtubeUrl = "YouTube URL is required";
+      } else {
+        // Validate YouTube URL format
+        const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+        if (!youtubeRegex.test(formData.video.youtubeUrl.trim())) {
+          newErrors.youtubeUrl = "Please enter a valid YouTube URL";
+        }
+      }
     }
 
     // Document is always required (Step 2)
     if (!formData.document.file && !formData.document.filePath) {
       newErrors.documentFile = "Document file is required";
     }
+    
+    // Remove isRequired validation - it's no longer a field
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (validateForm()) {
-      console.log("Content submitted:", formData);
-      // Handle form submission here
-      alert("Content created successfully!");
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+
+      // Check if there are file uploads
+      const hasVideoFile = formData.video.type === "upload" && formData.video.file && formData.video.file instanceof File;
+      const hasDocumentFile = formData.document.file && formData.document.file instanceof File;
+      const hasFileUploads = hasVideoFile || hasDocumentFile;
+
+      let contentData;
+
+      if (hasFileUploads) {
+        // Use FormData if there are file uploads
+        contentData = new FormData();
+        contentData.append('courseId', formData.courseId);
+        contentData.append('chapterId', formData.chapterId);
+        contentData.append('lessonId', formData.lessonId);
+        contentData.append('title', formData.title.trim());
+        if (formData.description) {
+          contentData.append('description', formData.description.trim());
+        }
+        contentData.append('isActive', formData.isActive);
+
+        // Append video data
+        contentData.append('videoType', formData.video.type);
+        if (formData.video.type === "upload" && hasVideoFile) {
+          contentData.append('video', formData.video.file);
+          if (formData.video.duration) {
+            contentData.append('videoDuration', parseInt(formData.video.duration));
+          }
+        } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
+          contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
+        }
+
+        // Append document file if it's a File
+        if (hasDocumentFile) {
+          contentData.append('document', formData.document.file);
+          if (formData.document.extractedText) {
+            contentData.append('extractedText', formData.document.extractedText);
+          }
+          if (formData.document.pageCount) {
+            contentData.append('pageCount', parseInt(formData.document.pageCount));
+          }
+        }
+      } else {
+        // Use plain object if no file uploads (shouldn't happen for add page, but handle it)
+        contentData = {
+          courseId: formData.courseId,
+          chapterId: formData.chapterId,
+          lessonId: formData.lessonId,
+          title: formData.title.trim(),
+          description: formData.description?.trim() || "",
+          isActive: formData.isActive,
+          video: {
+            type: formData.video.type,
+            ...(formData.video.type === "youtube" && formData.video.youtubeUrl ? { youtubeUrl: formData.video.youtubeUrl.trim() } : {}),
+            ...(formData.video.type === "upload" && formData.video.filePath ? { filePath: formData.video.filePath } : {})
+          },
+          document: null
+        };
+      }
+
+      const response = await lessonContentAPI.createLessonContent(contentData);
+
+      if (response.success) {
+        showSuccess('Lesson Content Created!', 'The lesson content has been created successfully.');
+        setTimeout(() => {
+        router.push('/lesson-content');
+        }, 1500);
+      } else {
+        showError('Error', response.message || 'Failed to create lesson content');
+      }
+    } catch (err) {
+      console.error('Error creating lesson content:', err);
+      showError('Error', err.message || 'Failed to create lesson content');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -192,15 +425,15 @@ export default function AddLessonContentPage() {
       <PageBreadcrumb 
         pageTitle="Add Lesson Content"
         breadcrumbs={[
-          { label: "Home", href: "/admin/dashboard" },
-          { label: "Lesson Content", href: "/admin/lesson-content" },
-          { label: "Add Content", href: "/admin/lesson-content/add" }
+          { label: "Home", href: "/" },
+          { label: "Lesson Content", href: "/lesson-content" },
+          { label: "Add Content", href: "/lesson-content/add" }
         ]}
       />
 
       {/* Header Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="outline" className="flex items-center gap-2">
+        <Button variant="outline" className="flex items-center gap-2" onClick={() => router.push('/lesson-content')}>
           <ArrowLeft className="w-4 h-4" />
           Back to Content
         </Button>
@@ -214,70 +447,60 @@ export default function AddLessonContentPage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Course *
+                  Course <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.courseId}
-                  onChange={(e) => handleInputChange("courseId", e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.courseId ? "border-red-500" : "border-gray-300"
-                  }`}
-                >
-                  <option value="">Select a course</option>
-                  {courses.map(course => (
-                    <option key={course.id} value={course.id}>
-                      {course.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleInputChange("courseId", value)}
+                  options={courses}
+                  placeholder="Select a course"
+                  displayKey="title"
+                  valueKey="_id"
+                  required={true}
+                  loading={loading}
+                  disabled={loading}
+                  error={errors.courseId}
+                />
                 {errors.courseId && <p className="text-red-500 text-sm mt-1">{errors.courseId}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Chapter *
+                  Chapter <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.chapterId}
-                  onChange={(e) => handleInputChange("chapterId", e.target.value)}
-                  disabled={!formData.courseId}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.chapterId ? "border-red-500" : "border-gray-300"
-                  } ${!formData.courseId ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                >
-                  <option value="">
-                    {formData.courseId ? "Select a chapter" : "Select a course first"}
-                  </option>
-                  {filteredChapters.map(chapter => (
-                    <option key={chapter.id} value={chapter.id}>
-                      {chapter.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleInputChange("chapterId", value)}
+                  options={chapters}
+                  placeholder={formData.courseId ? (loading ? "Loading chapters..." : "Select a chapter") : "Select a course first"}
+                  displayKey="title"
+                  valueKey="_id"
+                  required={true}
+                  loading={loading}
+                  disabled={!formData.courseId || loading}
+                  error={errors.chapterId}
+                  emptyMessage={formData.courseId && chapters.length === 0 ? "No chapters available for this course" : "No options found"}
+                />
                 {errors.chapterId && <p className="text-red-500 text-sm mt-1">{errors.chapterId}</p>}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Lesson *
+                  Lesson <span className="text-red-500">*</span>
                 </label>
-                <select
+                <SearchableSelect
                   value={formData.lessonId}
-                  onChange={(e) => handleInputChange("lessonId", e.target.value)}
-                  disabled={!formData.chapterId}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.lessonId ? "border-red-500" : "border-gray-300"
-                  } ${!formData.chapterId ? "bg-gray-100 cursor-not-allowed" : ""}`}
-                >
-                  <option value="">
-                    {formData.chapterId ? "Select a lesson" : "Select a chapter first"}
-                  </option>
-                  {filteredLessons.map(lesson => (
-                    <option key={lesson.id} value={lesson.id}>
-                      {lesson.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(value) => handleInputChange("lessonId", value)}
+                  options={lessons}
+                  placeholder={formData.chapterId ? (loading ? "Loading lessons..." : "Select a lesson") : "Select a chapter first"}
+                  displayKey="title"
+                  valueKey="_id"
+                  required={true}
+                  loading={loading}
+                  disabled={!formData.chapterId || loading}
+                  error={errors.lessonId}
+                  emptyMessage={formData.chapterId && lessons.length === 0 ? "No lessons available for this chapter" : "No options found"}
+                />
                 {errors.lessonId && <p className="text-red-500 text-sm mt-1">{errors.lessonId}</p>}
               </div>
             </div>
@@ -286,7 +509,7 @@ export default function AddLessonContentPage() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content Title *
+                  Content Title <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -300,32 +523,31 @@ export default function AddLessonContentPage() {
                 {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
               </div>
 
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isRequired"
-                    checked={formData.isRequired}
-                    onChange={(e) => handleInputChange("isRequired", e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor="isRequired" className="text-sm font-medium text-gray-700">
-                    Required Content
-                  </label>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Description <span className="text-gray-400 text-xs">(optional)</span>
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => handleInputChange("description", e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter content description"
+                />
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => handleInputChange("isActive", e.target.checked)}
-                    className="rounded"
-                  />
-                  <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
-                    Active Content
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Active Status <span className="text-gray-400 text-xs">(optional)</span>
                   </label>
-                </div>
+                <select
+                  value={formData.isActive ? "true" : "false"}
+                  onChange={(e) => handleInputChange("isActive", e.target.value === "true")}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
+                </select>
               </div>
             </div>
           </div>
@@ -361,10 +583,37 @@ export default function AddLessonContentPage() {
                   <h3 className="text-lg font-semibold text-gray-900">Video Content</h3>
                 </div>
                 
+                {/* Video Type Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Video Source <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.video.type || "upload"}
+                    onChange={(e) => {
+                      handleVideoChange("type", e.target.value);
+                      // Clear the other type's data
+                      if (e.target.value === "upload") {
+                        handleVideoChange("youtubeUrl", "");
+                      } else {
+                        handleVideoChange("file", null);
+                        handleVideoChange("fileName", "");
+                        handleVideoChange("filePath", "");
+                        handleVideoChange("duration", "");
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="upload">Upload Video File</option>
+                    <option value="youtube">YouTube URL</option>
+                  </select>
+                </div>
+
+                {formData.video.type === "upload" ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload Video File *
+                      Upload Video File <span className="text-red-500">*</span>
                     </label>
                     <div className="flex items-center gap-2">
                       <input
@@ -373,16 +622,26 @@ export default function AddLessonContentPage() {
                         onChange={(e) => {
                           const file = e.target.files[0];
                           if (file) {
-                            handleVideoChange("fileName", file.name);
-                            handleVideoChange("filePath", URL.createObjectURL(file));
-                            // Store file object for later upload
+                            // Store file object for upload
                             setFormData(prev => ({
                               ...prev,
                               video: {
                                 ...prev.video,
-                                file: file
+                                file: file,
+                                fileName: file.name,
+                                filePath: URL.createObjectURL(file) // For preview
                               }
                             }));
+                            
+                            // Auto-calculate video duration
+                            const video = document.createElement('video');
+                            video.preload = 'metadata';
+                            video.onloadedmetadata = () => {
+                              window.URL.revokeObjectURL(video.src);
+                              const duration = Math.round(video.duration);
+                              handleVideoChange("duration", duration);
+                            };
+                            video.src = URL.createObjectURL(file);
                           }
                         }}
                         className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${
@@ -400,17 +659,37 @@ export default function AddLessonContentPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Duration (seconds)
+                      Duration (seconds) <span className="text-gray-400 text-xs">(auto-calculated)</span>
                     </label>
                     <input
                       type="number"
-                      value={formData.video.duration}
-                      onChange={(e) => handleVideoChange("duration", parseInt(e.target.value))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="300"
+                        value={formData.video.duration || ""}
+                      readOnly
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                      placeholder="Will be calculated from video"
                     />
                   </div>
                 </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      YouTube URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.video.youtubeUrl || ""}
+                      onChange={(e) => handleVideoChange("youtubeUrl", e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.youtubeUrl ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter the full YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
+                    </p>
+                    {errors.youtubeUrl && <p className="text-red-500 text-sm mt-1">{errors.youtubeUrl}</p>}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-3 mt-6">
                   <Button type="button" variant="outline" onClick={() => setCurrentStep(2)}>
@@ -431,45 +710,60 @@ export default function AddLessonContentPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload PDF/File *
+                      Upload PDF/File <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.txt"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          handleDocumentChange("fileName", file.name);
-                          handleDocumentChange("filePath", URL.createObjectURL(file));
-                          // Store file object for later upload
-                          setFormData(prev => ({
-                            ...prev,
-                            document: {
-                              ...prev.document,
-                              file: file
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx,.txt"
+                        onChange={async (e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            // Store file object for upload
+                            setFormData(prev => ({
+                              ...prev,
+                              document: {
+                                ...prev.document,
+                                file: file,
+                                fileName: file.name,
+                                filePath: URL.createObjectURL(file) // For preview
+                              }
+                            }));
+                            
+                            // Extract text from PDF if it's a PDF file
+                            if (file.type === "application/pdf") {
+                              await extractPDFText(file);
+                            } else if (file.type === "text/plain") {
+                              // For text files, read directly
+                              const reader = new FileReader();
+                              reader.onload = (e) => {
+                                handleDocumentChange("extractedText", e.target.result);
+                              };
+                              reader.readAsText(file);
+                            } else {
+                              // For other file types, clear extracted text
+                              handleDocumentChange("extractedText", "");
                             }
-                          }));
-                          
-                          // Extract text from PDF if it's a PDF file
-                          if (file.type === "application/pdf") {
-                            extractPDFText(file);
-                          } else if (file.type === "text/plain") {
-                            // For text files, read directly
-                            const reader = new FileReader();
-                            reader.onload = (e) => {
-                              handleDocumentChange("extractedText", e.target.result);
-                            };
-                            reader.readAsText(file);
                           }
-                        }
-                      }}
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${
-                        errors.documentFile ? "border-red-500" : "border-gray-300"
-                      }`}
-                    />
+                        }}
+                        disabled={extractingPDF}
+                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${
+                          errors.documentFile ? "border-red-500" : "border-gray-300"
+                        }`}
+                      />
                     {formData.document.fileName && (
                       <p className="text-sm text-gray-600 mt-2">
                         Selected: {formData.document.fileName}
+                        {extractingPDF && (
+                          <span className="ml-2 text-blue-600 flex items-center gap-1">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Extracting text...
+                          </span>
+                        )}
+                        {formData.document.pageCount && !extractingPDF && (
+                          <span className="ml-2 text-gray-500">
+                            ({formData.document.pageCount} pages)
+                          </span>
+                        )}
                       </p>
                     )}
                     {errors.documentFile && <p className="text-red-500 text-sm mt-1">{errors.documentFile}</p>}
@@ -477,66 +771,27 @@ export default function AddLessonContentPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Extracted Text Content (Editable)
+                      Extracted Text Content (Editable) *
                     </label>
                     
-                    {/* Formatting Toolbar */}
-                    <div className="border border-gray-300 rounded-t-lg bg-gray-50 flex items-center gap-2 p-2">
-                      <button 
-                        type="button" 
-                        onClick={() => handleFormatClick('bold')}
-                        className="px-2 py-1 text-sm font-bold hover:bg-gray-200 rounded" 
-                        title="Bold"
-                      >
-                        B
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => handleFormatClick('italic')}
-                        className="px-2 py-1 text-sm italic hover:bg-gray-200 rounded" 
-                        title="Italic"
-                      >
-                        I
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => handleFormatClick('underline')}
-                        className="px-2 py-1 text-sm hover:bg-gray-200 rounded" 
-                        title="Underline"
-                      >
-                        U
-                      </button>
-                      <div className="w-px h-6 bg-gray-300 mx-1"></div>
-                      <select 
-                        onChange={(e) => handleFormatClick('fontSize', e.target.value)}
-                        className="px-2 py-1 text-sm border border-gray-300 rounded hover:bg-gray-200"
-                        defaultValue="3"
-                      >
-                        <option value="1">12px</option>
-                        <option value="2">14px</option>
-                        <option value="3">16px</option>
-                        <option value="4">18px</option>
-                        <option value="5">20px</option>
-                        <option value="6">24px</option>
-                      </select>
+                    {extractingPDF ? (
+                      <div className="border border-gray-300 rounded-lg p-8 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600">Extracting text from PDF...</p>
+                        <p className="text-xs text-gray-500 mt-1">This may take a moment for large PDFs</p>
                     </div>
-
-                    {/* Rich Text Editor Area */}
-                    <div
-                      contentEditable
-                      onBlur={(e) => handleDocumentChange("extractedText", e.target.innerText)}
-                      className="w-full min-h-[200px] px-3 py-2 border-x border-b border-gray-300 rounded-b-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white prose max-w-none"
-                      style={{ outline: 'none' }}
-                      suppressContentEditableWarning
-                    >
-                      {formData.document.extractedText || (
-                        <span className="text-gray-400 italic">
-                          Content extracted from PDF will appear here. You can edit with formatting tools above...
-                        </span>
+                    ) : (
+                      <RichTextEditor
+                        value={formData.document.extractedText || ""}
+                        onChange={(data) => handleDocumentChange("extractedText", data)}
+                        placeholder="Upload a PDF file to extract text content, or type your content here..."
+                        disabled={submitting}
+                        height="400px"
+                        className="border border-gray-300 rounded-lg"
+                      />
                       )}
-                    </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      Rich text editor with formatting tools (bold, italic, underline, size, color)
+                      Content extracted from PDF will appear above. You can edit it using the rich text editor.
                     </p>
                   </div>
                 </div>
@@ -552,12 +807,21 @@ export default function AddLessonContentPage() {
 
           {/* Form Actions */}
           <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <Button type="button" variant="outline">
+            <Button type="button" variant="outline" onClick={() => router.push('/lesson-content')}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" className="flex items-center gap-2">
-              <Save className="w-4 h-4" />
-              Create Content
+            <Button type="submit" variant="primary" className="flex items-center gap-2" disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Create Content
+                </>
+              )}
             </Button>
           </div>
         </form>

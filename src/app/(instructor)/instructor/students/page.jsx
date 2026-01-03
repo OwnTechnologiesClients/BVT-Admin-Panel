@@ -23,7 +23,7 @@ export default function InstructorStudentsPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {["#", "Name", "Rank", "Progress", "Status"].map((header) => (
+                {["#", "Name", "Progress", "Status"].map((header) => (
                   <th
                     key={header}
                     scope="col"
@@ -42,9 +42,6 @@ export default function InstructorStudentsPage() {
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 text-sm font-semibold text-gray-900">
                     {student.name}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-600">
-                    {student.rank}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
                     <div className="flex items-center gap-3">

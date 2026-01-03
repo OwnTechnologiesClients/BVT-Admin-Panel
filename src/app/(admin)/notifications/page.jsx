@@ -1,95 +1,11 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { PageBreadcrumb } from "@/components/common";
 import DataTable from "@/components/common/DataTable";
 import StudentQueryModal from "@/components/common/StudentQueryModal";
 import { Badge } from "@/components/ui";
-
-const mockQueries = [
-  {
-    id: "qry-001",
-    studentName: "Lt. Marcus Allen",
-    studentEmail: "marcus.allen@navy.mil",
-    course: "Navigation Systems & GPS",
-    assignedInstructor: "Cmdr. Sarah Johnson",
-    subject: "Clarification on satellite drift calculations",
-    priority: "High",
-    status: "Open",
-    lastUpdated: "2025-11-10T13:20:00Z",
-    submittedAt: "2025-11-10T09:15:00Z",
-    messages: [
-      {
-        id: "msg-001",
-        authorRole: "student",
-        authorName: "Lt. Marcus Allen",
-        timestamp: "2025-11-10T09:15:00Z",
-        content:
-          "Good morning, sir. Could you please clarify how we compensate for satellite drift when plotting an approach in heavy weather?",
-      },
-      {
-        id: "msg-002",
-        authorRole: "admin",
-        authorName: "Cmdr. Sarah Johnson",
-        timestamp: "2025-11-10T12:05:00Z",
-        content:
-          "Great question, Marcus. We will cover this in tomorrow's lab, but I'll share an excerpt from the manual shortly.",
-      },
-    ],
-  },
-  {
-    id: "qry-002",
-    studentName: "Ens. Priya Sharma",
-    studentEmail: "priya.sharma@navy.mil",
-    course: "Maritime Security Operations",
-    assignedInstructor: "Lt. Cmdr. Ethan Brooks",
-    subject: "Assessment availability",
-    priority: "Medium",
-    status: "Waiting on Student",
-    lastUpdated: "2025-11-09T17:42:00Z",
-    submittedAt: "2025-11-09T14:02:00Z",
-    messages: [
-      {
-        id: "msg-003",
-        authorRole: "student",
-        authorName: "Ens. Priya Sharma",
-        timestamp: "2025-11-09T14:02:00Z",
-        content:
-          "Will the tactical assessment remain open over the weekend? I'm deployed Saturday morning.",
-      },
-      {
-        id: "msg-004",
-        authorRole: "admin",
-        authorName: "Lt. Cmdr. Ethan Brooks",
-        timestamp: "2025-11-09T17:42:00Z",
-        content:
-          "Hi Priya, yes—it will remain available until Monday 1800 hrs. Let us know if you hit any issues.",
-      },
-    ],
-  },
-  {
-    id: "qry-003",
-    studentName: "Lt. Naomi Fitzgerald",
-    studentEmail: "naomi.fitzgerald@navy.mil",
-    course: "Submarine Operations Masterclass",
-    assignedInstructor: "Capt. Linda Perez",
-    subject: "Simulator login issue",
-    priority: "Critical",
-    status: "In Progress",
-    lastUpdated: "2025-11-11T08:05:00Z",
-    submittedAt: "2025-11-11T07:48:00Z",
-    messages: [
-      {
-        id: "msg-005",
-        authorRole: "student",
-        authorName: "Lt. Naomi Fitzgerald",
-        timestamp: "2025-11-11T07:48:00Z",
-        content:
-          "I'm unable to authenticate into the submerged maneuver simulator. It errors with 'token expired'.",
-      },
-    ],
-  },
-];
+import * as queryAPI from "@/lib/api/studentQuery";
 
 const priorityColors = {
   Critical: "error",
@@ -106,24 +22,96 @@ const statusColors = {
 };
 
 const AdminNotificationsPage = () => {
-  const [queries, setQueries] = useState(mockQueries);
-  const [selectedQueryId, setSelectedQueryId] = useState(
-    mockQueries[0]?.id ?? null
-  );
+  const [queries, setQueries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedQueryId, setSelectedQueryId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0
+  });
+
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Fetch queries from API
+  const fetchQueries = useCallback(async (page = 1, limit = 10, status = null, search = "") => {
+    try {
+      setLoading(true);
+      const params = { page, limit };
+      if (status && status !== "") params.status = status.toLowerCase();
+      if (search) params.search = search;
+      
+      const response = await queryAPI.getAllQueries(params);
+      if (response.success && response.data) {
+        const backendQueries = response.data.queries || [];
+        // Map backend data to frontend format
+        const mappedQueries = backendQueries.map((query) => ({
+          id: query._id,
+          _id: query._id,
+          studentName: query.studentId?.fullName || "Unknown Student",
+          studentEmail: query.studentId?.email || "",
+          course: query.courseId?.title || "Unknown Course",
+          courseId: query.courseId?._id || query.courseId,
+          assignedInstructor: query.assignedTo?.userId
+            ? `${query.assignedTo.userId.firstName || ""} ${query.assignedTo.userId.lastName || ""}`.trim() || "Unassigned"
+            : "Unassigned",
+          subject: query.subject,
+          priority: "Medium", // Backend doesn't have priority, defaulting to Medium
+          status: query.status ? query.status.charAt(0).toUpperCase() + query.status.slice(1) : "Open",
+          lastUpdated: query.lastUpdated || query.updatedAt || query.createdAt,
+          submittedAt: query.createdAt,
+          messages: (query.messages || []).map((msg) => ({
+            id: msg._id || `msg-${Date.now()}-${Math.random()}`,
+            authorRole: msg.sender === "student" ? "student" : "admin",
+            authorName: msg.senderName || "Unknown",
+            timestamp: msg.timestamp || new Date().toISOString(),
+            content: msg.content,
+            attachments: msg.attachments || []
+          }))
+        }));
+        
+        setQueries(mappedQueries);
+        
+        if (response.data.pagination) {
+          setPagination({
+            page: response.data.pagination.page || page,
+            limit: response.data.pagination.limit || limit,
+            total: response.data.pagination.total || 0,
+            totalPages: response.data.pagination.pages || 0
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching queries:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchQueries();
+  }, [fetchQueries]);
+
+  // Handle search change from DataTable
+  const handleSearchChange = useCallback((search) => {
+    setSearchTerm(search);
+    fetchQueries(1, pagination.limit, null, search);
+  }, [fetchQueries, pagination.limit]);
 
   const selectedQuery = useMemo(
-    () => queries.find((query) => query.id === selectedQueryId) ?? null,
+    () => queries.find((query) => query.id === selectedQueryId || query._id === selectedQueryId) ?? null,
     [queries, selectedQueryId]
   );
 
   const stats = useMemo(() => {
-    const total = queries.length;
-    const open = queries.filter((q) => q.status === "Open").length;
-    const inProgress = queries.filter((q) => q.status === "In Progress").length;
-    const waiting = queries.filter(
-      (q) => q.status === "Waiting on Student"
-    ).length;
+    const total = pagination.total || queries.length;
+    const open = queries.filter((q) => q.status === "Open" || q.status === "open").length;
+    const inProgress = queries.filter((q) => q.status === "In Progress" || q.status === "in progress").length;
+    const resolved = queries.filter((q) => q.status === "Resolved" || q.status === "resolved").length;
+    const closed = queries.filter((q) => q.status === "Closed" || q.status === "closed").length;
 
     return [
       {
@@ -141,21 +129,21 @@ const AdminNotificationsPage = () => {
         iconColor: "text-green-600",
       },
       {
-        label: "In Progress",
-        value: inProgress,
-        icon: "🛠️",
-        bgColor: "bg-yellow-100",
-        iconColor: "text-yellow-600",
+        label: "Resolved",
+        value: resolved,
+        icon: "✅",
+        bgColor: "bg-blue-100",
+        iconColor: "text-blue-600",
       },
       {
-        label: "Waiting on Student",
-        value: waiting,
-        icon: "⏳",
-        bgColor: "bg-purple-100",
-        iconColor: "text-purple-600",
+        label: "Closed",
+        value: closed,
+        icon: "🔒",
+        bgColor: "bg-gray-100",
+        iconColor: "text-gray-600",
       },
     ];
-  }, [queries]);
+  }, [queries, pagination]);
 
   const columns = [
     {
@@ -197,9 +185,12 @@ const AdminNotificationsPage = () => {
     {
       key: "status",
       label: "Status",
-      render: (value) => (
-        <Badge color={statusColors[value] || "default"}>{value}</Badge>
-      ),
+      render: (value) => {
+        const capitalizedStatus = value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase() : "Open";
+        return (
+          <Badge color={statusColors[capitalizedStatus] || "default"}>{capitalizedStatus}</Badge>
+        );
+      },
     },
     {
       key: "lastUpdated",
@@ -218,43 +209,22 @@ const AdminNotificationsPage = () => {
     {
       key: "status",
       label: "Status",
-      options: ["Open", "In Progress", "Waiting on Student", "Resolved"],
-    },
-    {
-      key: "priority",
-      label: "Priority",
-      options: ["Critical", "High", "Medium", "Low"],
+      options: ["open", "resolved", "closed"],
     },
   ];
 
   const handleSelectQuery = (query) => {
-    setSelectedQueryId(query.id);
+    setSelectedQueryId(query.id || query._id);
     setIsModalOpen(true);
   };
 
-  const handleSendReply = (messageContent) => {
-    if (!selectedQuery || !messageContent) return;
-    const newMessage = {
-      id: `msg-${Date.now()}`,
-      authorRole: "admin",
-      authorName: "Admin Respondent",
-      timestamp: new Date().toISOString(),
-      content: messageContent,
-    };
-
-    setQueries((prev) =>
-      prev.map((query) =>
-        query.id === selectedQuery.id
-          ? {
-              ...query,
-              status: "In Progress",
-              lastUpdated: newMessage.timestamp,
-              messages: [...query.messages, newMessage],
-            }
-          : query
-      )
-    );
-    setIsModalOpen(false);
+  const handleSendReply = async (messageContent) => {
+    // Refresh the query list to get updated data (message or status change)
+    try {
+      await fetchQueries(pagination.page, pagination.limit, currentStatus, searchTerm);
+    } catch (error) {
+      console.error("Error refreshing queries:", error);
+    }
   };
 
   return (
@@ -275,6 +245,16 @@ const AdminNotificationsPage = () => {
         filters={filters}
         searchPlaceholder="Search by student, course, or subject..."
         onView={handleSelectQuery}
+        pagination={pagination}
+        onPageChange={(page) => fetchQueries(page, pagination.limit, null, searchTerm)}
+        onPageSizeChange={(limit) => fetchQueries(1, limit, null, searchTerm)}
+        onSearchChange={handleSearchChange}
+        onFilterChange={(filters) => {
+          const status = filters.status || null;
+          setCurrentStatus(status);
+          fetchQueries(1, pagination.limit, status, searchTerm);
+        }}
+        serverSide={true}
       />
 
       <StudentQueryModal

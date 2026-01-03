@@ -16,6 +16,7 @@ import {
   ChevronDownIcon,
   HorizontaLDots,
   ClipboardListIcon,
+  EnvelopeIcon,
 } from "../icons/index";
 
 const adminNavItems = [
@@ -52,20 +53,26 @@ const adminNavItems = [
   },
   {
     icon: <CalendarDaysIcon />,
-    name: "Events",
+    name: "Event Management",
     subItems: [
-      { name: "View Events", path: "/events" },
-      { name: "Add Event", path: "/events/add" },
+      { name: "Events", path: "/event-categories", subItems: [
+        { name: "View Event", path: "/events" },
+        { name: "Add Event", path: "/events/add" }
+      ]},
+      { name: "Event Themes", path: "/event-categories", subItems: [
+        { name: "View Themes", path: "/event-categories" },
+        { name: "Add Theme", path: "/event-categories/add" }
+      ]},
     ],
   },
-  {
-    icon: <GraduationCapIcon />,
-    name: "Programs",
-    subItems: [
-      { name: "View Programs", path: "/programs" },
-      { name: "Add Program", path: "/programs/add" },
-    ],
-  },
+  // {
+  //   icon: <GraduationCapIcon />,
+  //   name: "Programs",
+  //   subItems: [
+  //     { name: "View Programs", path: "/programs" },
+  //     { name: "Add Program", path: "/programs/add" },
+  //   ],
+  // },
   {
     icon: <ClipboardListIcon />,
     name: "Tests",
@@ -76,10 +83,10 @@ const adminNavItems = [
   },
   {
     icon: <UsersIcon />,
-    name: "Students",
+    name: "Users",
     subItems: [
-      { name: "View Students", path: "/students" },
-      { name: "Add Student", path: "/students/add" },
+      { name: "View Users", path: "/users" },
+      { name: "Add User", path: "/users/add" },
     ],
   },
   {
@@ -90,33 +97,26 @@ const adminNavItems = [
       { name: "Add Instructor", path: "/instructors/add" },
     ],
   },
+  {
+    icon: <UsersIcon />,
+    name: "Students",
+    subItems: [
+      { name: "View Students", path: "/students" },
+      { name: "Add Student", path: "/students/add" },
+    ],
+  },
 ];
 
 const adminOthersItems = [
   {
-    icon: <BarChartIcon />,
-    name: "Analytics",
-    subItems: [
-      { name: "Course Analytics", path: "/analytics/courses" },
-      { name: "Instructor Analytics", path: "/analytics/instructors" },
-      { name: "Revenue Analytics", path: "/analytics/revenue" },
-    ],
+    icon: <EnvelopeIcon />,
+    name: "Support Inquiries",
+    path: "/support-inquiries",
   },
   {
     icon: <ClipboardListIcon />,
-    name: "Notifications",
-    subItems: [
-      { name: "Student Queries", path: "/notifications" },
-    ],
-  },
-  {
-    icon: <SettingsIcon />,
-    name: "Settings",
-    subItems: [
-      { name: "General Settings", path: "/settings/general" },
-      { name: "Course Settings", path: "/settings/courses" },
-      { name: "Instructor Settings", path: "/settings/instructors" },
-    ],
+    name: "Student Queries",
+    path: "/notifications",
   },
 ];
 
@@ -196,30 +196,102 @@ const AppSidebar = () => {
   const [subMenuHeight, setSubMenuHeight] = useState({});
   const subMenuRefs = useRef({});
 
+  // Helper function to get all paths from navigation items
+  const getAllPaths = useCallback((items) => {
+    const paths = [];
+    items.forEach((nav) => {
+      if (nav.subItems) {
+        nav.subItems.forEach((subItem) => {
+          paths.push(subItem.path);
+          if (subItem.subItems) {
+            subItem.subItems.forEach((nestedSubItem) => {
+              paths.push(nestedSubItem.path);
+            });
+          }
+        });
+      }
+      if (nav.path) {
+        paths.push(nav.path);
+      }
+    });
+    return paths;
+  }, []);
+
   const isActive = useCallback(
-    (path) =>
-      path === pathname ||
-      (path !== "/" && pathname.startsWith(path + "/")) ||
-      (path !== "/" && pathname === path),
-    [pathname]
+    (path) => {
+      // Exact match takes priority
+      if (path === pathname) {
+        return true;
+      }
+      
+      // For paths other than root, check if pathname starts with path + "/"
+      // But only if there's no more specific path that matches exactly
+      if (path !== "/" && pathname.startsWith(path + "/")) {
+        // Check if there's a more specific path that matches exactly
+        const allPaths = getAllPaths([...primaryNav, ...secondaryNav]);
+        const hasMoreSpecificMatch = allPaths.some(
+          (p) => p !== path && pathname === p && p.startsWith(path + "/")
+        );
+        
+        // Only highlight parent if no more specific child matches
+        return !hasMoreSpecificMatch;
+      }
+      
+      return false;
+    },
+    [pathname, primaryNav, secondaryNav, getAllPaths]
   );
 
   useEffect(() => {
     // Check if the current path matches any submenu item
+    // We need to check all paths (including nested) to find the most specific match
     let submenuMatched = false;
+    let matchedIndex = null;
+    let matchedType = null;
+    
     ["main", "others"].forEach((menuType) => {
       const items = menuType === "main" ? primaryNav : secondaryNav;
       items.forEach((nav, index) => {
         if (nav.subItems) {
-          nav.subItems.forEach((subItem) => {
-            if (isActive(subItem.path)) {
+          // Check all subItems (including nested ones) for exact matches first
+          const checkSubItems = (subItems) => {
+            for (const subItem of subItems) {
+              // Check exact match first (most specific)
+              if (pathname === subItem.path) {
               setOpenSubmenu({
                 type: menuType,
                 index,
               });
               submenuMatched = true;
+                matchedIndex = index;
+                matchedType = menuType;
+                return true;
+              }
+              // Check nested subItems
+              if (subItem.subItems) {
+                if (checkSubItems(subItem.subItems)) {
+                  return true;
+                }
+              }
             }
-          });
+            return false;
+          };
+          
+          // First check for exact matches
+          if (!checkSubItems(nav.subItems)) {
+            // If no exact match, check for parent path matches
+            nav.subItems.forEach((subItem) => {
+              if (isActive(subItem.path) && !submenuMatched) {
+                setOpenSubmenu({
+                  type: menuType,
+                  index,
+                });
+                submenuMatched = true;
+                matchedIndex = index;
+                matchedType = menuType;
+              }
+            });
+          }
         }
       });
     });

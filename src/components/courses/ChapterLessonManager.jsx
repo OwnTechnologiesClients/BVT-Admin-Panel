@@ -10,16 +10,13 @@ const ChapterLessonManager = ({ courseId }) => {
       id: 1,
       title: "Getting Started",
       description: "Introduction to the course",
-      order: 1,
       duration: "2 hours",
       lessons: [
         {
           id: 1,
           title: "Course Overview",
           description: "Understanding the course structure",
-          order: 1,
           duration: "30 minutes",
-          type: "lecture",
           isActive: true
         }
       ]
@@ -34,7 +31,6 @@ const ChapterLessonManager = ({ courseId }) => {
       id: chapters.length + 1,
       title: "",
       description: "",
-      order: chapters.length + 1,
       duration: "",
       lessons: []
     };
@@ -61,9 +57,7 @@ const ChapterLessonManager = ({ courseId }) => {
       id: chapter.lessons.length + 1,
       title: "",
       description: "",
-      order: chapter.lessons.length + 1,
       duration: "",
-      type: "lecture",
       isActive: true
     };
     
@@ -159,23 +153,13 @@ const ChapterLessonManager = ({ courseId }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Chapter description"
             />
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="text"
-                value={chapter.duration}
-                onChange={(e) => updateChapter(chapter.id, 'duration', e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Duration (e.g., 2 hours)"
-              />
-              <input
-                type="number"
-                value={chapter.order}
-                onChange={(e) => updateChapter(chapter.id, 'order', parseInt(e.target.value))}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Order"
-                min="1"
-              />
-            </div>
+            <input
+              type="text"
+              value={chapter.duration}
+              onChange={(e) => updateChapter(chapter.id, 'duration', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Duration (e.g., 2 hours)"
+            />
           </div>
 
           {/* Lessons */}
@@ -215,7 +199,7 @@ const ChapterLessonManager = ({ courseId }) => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <input
                     type="text"
                     value={lesson.description}
@@ -230,16 +214,6 @@ const ChapterLessonManager = ({ courseId }) => {
                     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Duration"
                   />
-                  <select
-                    value={lesson.type}
-                    onChange={(e) => updateLesson(chapter.id, lesson.id, 'type', e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="lecture">Lecture</option>
-                    <option value="practical">Practical</option>
-                    <option value="workshop">Workshop</option>
-                    <option value="assessment">Assessment</option>
-                  </select>
                 </div>
               </div>
             ))}
