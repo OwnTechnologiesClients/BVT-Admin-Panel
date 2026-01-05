@@ -18,6 +18,7 @@ export default function CourseDetailsPage({ params }) {
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState("overview");
+  const [imageError, setImageError] = useState(false);
 
   // Fetch course data
   useEffect(() => {
@@ -29,6 +30,8 @@ export default function CourseDetailsPage({ params }) {
         if (response.success) {
           setCourseData(response.data.course);
           setChapters(response.data.structure?.chapters || []);
+          setImageError(false); // Reset image error when course data is loaded
+          console.log('📸 Course image URL:', response.data.course.image);
         } else {
           setError(response.message || 'Course not found');
         }
@@ -183,18 +186,25 @@ export default function CourseDetailsPage({ params }) {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Course Image */}
           <div className="lg:col-span-1">
-            {courseData.image ? (
+            {courseData.image && !imageError ? (
               <img 
                 src={courseData.image} 
                 alt={courseData.title}
                 className="w-full h-48 object-cover rounded-lg border border-gray-200"
                 onError={(e) => {
-                  e.target.src = '/images/course-placeholder.jpg';
+                  console.error('❌ Image failed to load:', courseData.image);
+                  console.error('Error event:', e);
+                  setImageError(true);
+                }}
+                onLoad={() => {
+                  console.log('✅ Course image loaded successfully:', courseData.image);
                 }}
               />
             ) : (
               <div className="w-full h-48 bg-gray-200 rounded-lg border border-gray-300 flex items-center justify-center">
-                <span className="text-gray-400">No Image</span>
+                <span className="text-gray-400">
+                  {courseData.image ? 'Image failed to load' : 'No Image'}
+                </span>
               </div>
             )}
           </div>

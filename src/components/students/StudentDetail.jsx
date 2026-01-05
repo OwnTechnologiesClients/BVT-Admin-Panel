@@ -39,15 +39,17 @@ const StudentDetail = ({ student }) => {
   // Helper to get image URL
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
+    // If it's already a full URL (S3 or other), return as is
     if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
       return imagePath;
     }
-    if (imagePath.startsWith("/uploads") || imagePath.startsWith("/images")) {
-      return process.env.NEXT_PUBLIC_API_URL 
-        ? `${process.env.NEXT_PUBLIC_API_URL}${imagePath}`
-        : `http://localhost:5000${imagePath}`;
+    // If it's a data URL (base64), return as is
+    if (imagePath.startsWith("data:image")) {
+      return imagePath;
     }
-    return imagePath;
+    // Otherwise, construct URL using API base URL (for local files)
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    return `${apiBaseUrl}${imagePath.startsWith('/') ? imagePath : '/' + imagePath}`;
   };
 
   const imageUrl = getImageUrl(student?.image || student?.profilePic);

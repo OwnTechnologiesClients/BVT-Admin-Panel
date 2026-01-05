@@ -17,6 +17,7 @@ export default function EventDetailsPage({ params }) {
   const [deleting, setDeleting] = useState(false);
   const [categoryName, setCategoryName] = useState(null);
   const [eventTypeName, setEventTypeName] = useState(null);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -28,6 +29,8 @@ export default function EventDetailsPage({ params }) {
         if (response.success) {
           const data = response.data;
           setEventData(data);
+          setImageError(false); // Reset image error when event data is loaded
+          console.log('📸 Event image URL:', data.eventImage); // Debug log
 
           // Extract category name from populated object
           if (data.category) {
@@ -210,18 +213,29 @@ export default function EventDetailsPage({ params }) {
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Event Image */}
-          {eventData.eventImage && (
+          {eventData.eventImage && !imageError ? (
             <div className="lg:col-span-1">
               <img 
                 src={eventData.eventImage} 
                 alt={eventData.title}
                 className="w-full h-64 object-cover rounded-lg border border-gray-200"
                 onError={(e) => {
-                  e.target.src = '/images/event-placeholder.jpg';
+                  console.error('❌ Event image failed to load:', eventData.eventImage);
+                  console.error('Error event:', e);
+                  setImageError(true); // Set imageError to true on error
+                }}
+                onLoad={() => {
+                  console.log('✅ Event image loaded successfully:', eventData.eventImage); // Debug log
                 }}
               />
             </div>
-          )}
+          ) : eventData.eventImage ? (
+            <div className="lg:col-span-1">
+              <div className="w-full h-64 bg-gray-200 rounded-lg border border-gray-300 flex items-center justify-center">
+                <span className="text-gray-400">Image not available</span>
+              </div>
+            </div>
+          ) : null}
           
           {/* Event Info */}
           <div className={`space-y-4 ${eventData.eventImage ? 'lg:col-span-2' : 'lg:col-span-3'}`}>

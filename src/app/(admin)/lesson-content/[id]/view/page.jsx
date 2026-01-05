@@ -47,13 +47,13 @@ export default function ViewLessonContentPage({ params }) {
 
   const getFileUrl = (filePath) => {
     if (!filePath) return null;
-    // If it's already a full URL, return as is
+    // If it's already a full URL (S3 or other), return as is
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
       return filePath;
     }
-    // Otherwise, construct URL using API base URL
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-    return `${apiBaseUrl}${filePath}`;
+    // Otherwise, construct URL using API base URL (for local files)
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    return `${apiBaseUrl}${filePath.startsWith('/') ? filePath : '/' + filePath}`;
   };
 
   if (loading) {
@@ -266,27 +266,6 @@ export default function ViewLessonContentPage({ params }) {
                     )}
                   </div>
                 </div>
-                {content.video.filePath && (
-                  <div className="flex gap-2">
-                    <a
-                      href={getFileUrl(content.video.filePath)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      View Video
-                    </a>
-                    <a
-                      href={getFileUrl(content.video.filePath)}
-                      download
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download
-                    </a>
-                  </div>
-                )}
               </div>
               {content.video.filePath && (
                 <div className="mt-4">
@@ -323,27 +302,6 @@ export default function ViewLessonContentPage({ params }) {
                     )}
                   </div>
                 </div>
-                {content.document.filePath && (
-                  <div className="flex gap-2">
-                    <a
-                      href={getFileUrl(content.document.filePath)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-                    >
-                      <ExternalLink className="w-4 h-4" />
-                      View Document
-                    </a>
-                    <a
-                      href={getFileUrl(content.document.filePath)}
-                      download
-                      className="flex items-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                    >
-                      <Download className="w-4 h-4" />
-                      Download
-                    </a>
-                  </div>
-                )}
               </div>
 
               {/* Extracted Text Content */}

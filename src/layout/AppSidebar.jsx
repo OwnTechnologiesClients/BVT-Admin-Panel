@@ -110,6 +110,14 @@ const adminNavItems = [
 const adminOthersItems = [
   {
     icon: <EnvelopeIcon />,
+    name: "Email Campaigns",
+    subItems: [
+      { name: "All Campaigns", path: "/email-campaigns" },
+      { name: "Create Campaign", path: "/email-campaigns/create" },
+    ],
+  },
+  {
+    icon: <EnvelopeIcon />,
     name: "Support Inquiries",
     path: "/support-inquiries",
   },
