@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ComponentCard } from "@/components/common/ComponentCard";
 import { Button } from "@/components/ui";
 import { createStudent, updateStudent, getStudentById } from "@/lib/api/student";
+import { showSuccess, showError } from "@/lib/utils/sweetalert";
 import { Eye, EyeOff, X } from "lucide-react";
 
 const initialFormState = {
@@ -44,17 +45,16 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
       // If student has an existing image, set preview
       if (initialData.image || initialData.profilePic) {
         const imageUrl = initialData.image || initialData.profilePic;
-        // If it's a URL, use it directly; otherwise construct full URL
+        // If it's a full URL (S3 or other), use it directly
         if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
           setImagePreview(imageUrl);
-        } else if (imageUrl.startsWith('/uploads') || imageUrl.startsWith('/images')) {
-          setImagePreview(
-            process.env.NEXT_PUBLIC_API_URL 
-              ? `${process.env.NEXT_PUBLIC_API_URL}${imageUrl}`
-              : `http://localhost:5000${imageUrl}`
-          );
-        } else {
+        } else if (imageUrl.startsWith('data:image')) {
+          // Base64 image
           setImagePreview(imageUrl);
+        } else {
+          // Local file path - construct URL
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+          setImagePreview(`${apiBaseUrl}${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`);
         }
       }
     }
@@ -488,13 +488,21 @@ const StudentForm = ({ studentId, initialData, onSuccess }) => {
             {(imagePreview || (studentId && initialData?.image)) && (
               <div className="relative inline-block">
                 <img
-                  src={imagePreview || (initialData?.image?.startsWith('http') 
-                    ? initialData.image 
-                    : initialData?.image?.startsWith('/uploads') || initialData?.image?.startsWith('/images')
-                    ? (process.env.NEXT_PUBLIC_API_URL 
-                        ? `${process.env.NEXT_PUBLIC_API_URL}${initialData.image}`
-                        : `http://localhost:5000${initialData.image}`)
-                    : initialData?.image)}
+                  src={imagePreview || (() => {
+                    const imageUrl = initialData?.image;
+                    if (!imageUrl) return null;
+                    // If it's already a full URL (S3 or other), use it directly
+                    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+                      return imageUrl;
+                    }
+                    // If it's a data URL (base64), use it directly
+                    if (imageUrl.startsWith('data:image')) {
+                      return imageUrl;
+                    }
+                    // Otherwise, construct URL using API base URL (for local files)
+                    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
+                    return `${apiBaseUrl}${imageUrl.startsWith('/') ? imageUrl : '/' + imageUrl}`;
+                  })()}
                   alt="Profile preview"
                   className="w-32 h-32 rounded-full object-cover border-2 border-gray-300"
                   onError={(e) => {

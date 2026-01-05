@@ -203,10 +203,16 @@ const StudentQueryModal = ({ isOpen, onClose, query, onSendReply }) => {
               </p>
               {message.attachments && message.attachments.length > 0 && (
                 <div className="mt-2 space-y-1">
-                  {message.attachments.map((attachment, idx) => (
+                  {message.attachments.map((attachment, idx) => {
+                    // Use attachment.filePath directly - backend already converts to full S3 URL
+                    const fileUrl = attachment.filePath?.startsWith('http://') || attachment.filePath?.startsWith('https://')
+                      ? attachment.filePath
+                      : `${process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000'}${attachment.filePath}`;
+                    
+                    return (
                     <a
                       key={idx}
-                      href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}${attachment.filePath}`}
+                        href={fileUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 p-1.5 bg-white rounded text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors"
@@ -214,7 +220,8 @@ const StudentQueryModal = ({ isOpen, onClose, query, onSendReply }) => {
                       <File className="w-3 h-3" />
                       <span className="truncate flex-1">{attachment.fileName}</span>
                     </a>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               </div>
