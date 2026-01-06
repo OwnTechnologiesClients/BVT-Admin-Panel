@@ -60,24 +60,26 @@ export const getCategoryBySlug = async (slug) => {
 
 /**
  * Create new category
- * @param {Object} categoryData - Category data
+ * @param {Object|FormData} categoryData - Category data (can be object or FormData for image upload)
  */
 export const createCategory = async (categoryData) => {
+  const isFormData = categoryData instanceof FormData;
   return await apiRequest('/course-categories/create', {
     method: 'POST',
-    body: JSON.stringify(categoryData),
+    body: isFormData ? categoryData : JSON.stringify(categoryData),
   });
 };
 
 /**
  * Update category
  * @param {string} id - Category ID
- * @param {Object} categoryData - Updated category data
+ * @param {Object|FormData} categoryData - Updated category data (can be object or FormData for image upload)
  */
 export const updateCategory = async (id, categoryData) => {
+  const isFormData = categoryData instanceof FormData;
   return await apiRequest(`/course-categories/update/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(categoryData),
+    body: isFormData ? categoryData : JSON.stringify(categoryData),
   });
 };
 

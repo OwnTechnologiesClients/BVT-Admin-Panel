@@ -4,9 +4,10 @@ import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Button } from "@/components/ui";
-import { ArrowLeft, Save, Loader2 } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Plus, Trash2 } from "lucide-react";
 import * as categoryAPI from "@/lib/api/courseCategory";
 import { showSuccess, showError } from "@/lib/utils/sweetalert";
+import { getImageUrl } from "@/lib/utils/urlHelpers";
 
 export default function EditCategoryPage({ params }) {
   const router = useRouter();
@@ -15,6 +16,7 @@ export default function EditCategoryPage({ params }) {
     name: "",
     slug: "",
     description: "",
+    image: null,
     status: "active"
   });
 
@@ -34,6 +36,7 @@ export default function EditCategoryPage({ params }) {
             name: response.data.name || "",
             slug: response.data.slug || "",
             description: response.data.description || "",
+            image: response.data.image || null,
             status: response.data.isActive !== undefined ? (response.data.isActive ? "active" : "inactive") : "active"
           });
         } else {
@@ -108,12 +111,31 @@ export default function EditCategoryPage({ params }) {
 
     try {
       setSubmitting(true);
-      const response = await categoryAPI.updateCategory(id, {
-        name: formData.name.trim(),
-        slug: formData.slug.trim(),
-        description: formData.description.trim(),
-        isActive: formData.status === "active"
-      });
+      
+      // Check if there's a new image file to upload
+      const hasImageUpload = formData.image !== null && formData.image instanceof File;
+      
+      let response;
+      if (hasImageUpload) {
+        // Use FormData if there's a new image file
+        const formDataToSend = new FormData();
+        formDataToSend.append('name', formData.name.trim());
+        formDataToSend.append('slug', formData.slug.trim());
+        formDataToSend.append('description', formData.description.trim());
+        formDataToSend.append('isActive', formData.status === "active");
+        formDataToSend.append('image', formData.image);
+        
+        response = await categoryAPI.updateCategory(id, formDataToSend);
+      } else {
+        // Use plain object if no new image (keep existing or set to null)
+        response = await categoryAPI.updateCategory(id, {
+          name: formData.name.trim(),
+          slug: formData.slug.trim(),
+          description: formData.description.trim(),
+          image: formData.image || null,
+          isActive: formData.status === "active"
+        });
+      }
 
       if (response.success) {
         showSuccess('Category Updated!', 'The category has been updated successfully.');
@@ -216,6 +238,42 @@ export default function EditCategoryPage({ params }) {
                 />
                 {errors.slug && <p className="text-red-500 text-sm mt-1">{errors.slug}</p>}
               </div>
+
+              {/* Image Upload */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category Image <span className="text-gray-400 text-xs">(optional)</span>
+                </label>
+                {formData.image ? (
+                  <div className="relative group">
+                    <img
+                      src={formData.image instanceof File ? URL.createObjectURL(formData.image) : getImageUrl(formData.image)}
+                      alt="Category preview"
+                      className="rounded-lg border border-gray-200 max-h-48 w-full object-cover shadow-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleInputChange("image", null)}
+                      className="absolute top-2 right-2 bg-white hover:bg-red-100 rounded-full p-2 text-red-600 border border-red-200 shadow"
+                      title="Remove image"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="block cursor-pointer bg-white border border-dashed border-gray-300 rounded-lg px-6 py-8 min-h-[150px] flex flex-col items-center justify-center text-center text-gray-500 hover:border-blue-400 transition-all">
+                    <Plus className="w-8 h-8 mb-2" />
+                    <span className="font-medium">Click to upload category image</span>
+                    <span className="text-xs text-gray-400 mt-1">JPG, PNG, GIF. Max size: 5MB</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleInputChange("image", e.target.files[0] || null)}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
             </div>
 
             {/* Right Column */}
@@ -235,6 +293,7 @@ export default function EditCategoryPage({ params }) {
                 />
                 {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
               </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Status <span className="text-gray-400 text-xs">(optional)</span>
