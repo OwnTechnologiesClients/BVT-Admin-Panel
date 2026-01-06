@@ -4,8 +4,9 @@ import React, { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { PageBreadcrumb } from "@/components/common";
 import { Badge, Button } from "@/components/ui";
-import { ArrowLeft, Edit, Loader2, Calendar, User } from "lucide-react";
+import { ArrowLeft, Edit, Loader2, Calendar, User, Image as ImageIcon } from "lucide-react";
 import * as categoryAPI from "@/lib/api/courseCategory";
+import { getImageUrl } from "@/lib/utils/urlHelpers";
 
 export default function ViewCategoryPage({ params }) {
   const router = useRouter();
@@ -106,16 +107,49 @@ export default function ViewCategoryPage({ params }) {
 
       {/* Category Overview */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="space-y-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{category.name}</h1>
-            <p className="text-gray-600 mt-2">{category.description || 'No description available'}</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Category Image */}
+          <div className="lg:col-span-1">
+            {category.image ? (
+              <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                <img 
+                  src={getImageUrl(category.image)} 
+                  alt={category.name}
+                  className="w-full h-64 object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextElementSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="hidden w-full h-64 bg-gray-100 items-center justify-center">
+                  <div className="text-center text-gray-400">
+                    <ImageIcon className="w-12 h-12 mx-auto mb-2" />
+                    <p className="text-sm">Image not available</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full h-64 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
+                <div className="text-center text-gray-400">
+                  <ImageIcon className="w-12 h-12 mx-auto mb-2" />
+                  <p className="text-sm">No image uploaded</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Badge color={category.isActive ? "success" : "error"}>
-              {category.isActive ? "Active" : "Inactive"}
-            </Badge>
+          {/* Category Info */}
+          <div className="lg:col-span-2 space-y-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{category.name}</h1>
+              <p className="text-gray-600 mt-2">{category.description || 'No description available'}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Badge color={category.isActive ? "success" : "error"}>
+                {category.isActive ? "Active" : "Inactive"}
+              </Badge>
+            </div>
           </div>
         </div>
       </div>
