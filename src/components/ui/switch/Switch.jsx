@@ -19,4 +19,3 @@ export const Switch = ({ checked, onChange, disabled = false, className = "" }) 
   );
 };
 
-export { Switch };
