@@ -312,7 +312,7 @@ const TestDetailsView = ({
                 }));
               }
             } catch (err) {
-              console.log('Could not fetch course enrollments:', err);
+              // Could not fetch course enrollments
             }
           }
         } else {
@@ -321,7 +321,7 @@ const TestDetailsView = ({
           setTestData(defaultTestData(testId));
         }
       } catch (err) {
-        console.error('Error fetching test:', err);
+        // Error fetching test
         setError(err.message || 'Failed to fetch test');
         // Fallback to default data for preview
         setTestData(defaultTestData(testId));
@@ -405,11 +405,9 @@ const TestDetailsView = ({
         }));
         setResultsReleased(newShowResults);
       } else {
-        console.error('Failed to update test:', response.message);
         showError('Error', 'Failed to update test results setting');
       }
     } catch (err) {
-      console.error('Error updating test:', err);
       showError('Error', 'Failed to update test results setting');
     } finally {
       setUpdatingResults(false);
@@ -474,7 +472,6 @@ const TestDetailsView = ({
         showError('Error', response.message || `Failed to ${action} retake`);
       }
     } catch (err) {
-      console.error('Error toggling retake:', err);
       showError('Error', `Failed to ${action} retake`);
     } finally {
       setTogglingRetake(null);

@@ -38,9 +38,6 @@ export default function InstructorDetailsPage({ params }) {
             return;
           }
           
-          // Log for debugging
-          console.log("Instructor data received:", instructor);
-          
           // Flatten the data structure if userId is populated
           // The backend returns instructor with populated userId
           const flattenedData = {
@@ -61,7 +58,6 @@ export default function InstructorDetailsPage({ params }) {
         }
       } catch (err) {
         setError(err.message || "An error occurred while fetching instructor");
-        console.error("Error fetching instructor:", err);
       } finally {
         setLoading(false);
       }
@@ -84,7 +80,7 @@ export default function InstructorDetailsPage({ params }) {
           setCourses(response.data || []);
         }
       } catch (err) {
-        console.error("Error fetching courses:", err);
+        // Error fetching courses
       } finally {
         setCoursesLoading(false);
       }

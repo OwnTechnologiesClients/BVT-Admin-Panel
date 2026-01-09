@@ -27,7 +27,6 @@ export default function ViewCategoryPage({ params }) {
           setError('Category not found');
         }
       } catch (err) {
-        console.error('Error fetching category:', err);
         setError(err.message || 'Failed to fetch category');
       } finally {
         setLoading(false);

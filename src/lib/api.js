@@ -3,11 +3,6 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-// Log API URL in development for debugging
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  console.log('API Base URL:', API_BASE_URL);
-}
-
 // Helper function to get auth token from localStorage
 const getToken = () => {
   if (typeof window !== 'undefined') {
@@ -181,7 +176,6 @@ export const authAPI = {
       await axiosInstance.post('/auth/logout');
     } catch (error) {
       // Even if logout fails on server, clear local storage
-      console.error('Logout error:', error);
     } finally {
       removeToken();
     }

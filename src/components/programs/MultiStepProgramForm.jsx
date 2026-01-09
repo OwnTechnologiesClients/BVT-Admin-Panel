@@ -110,7 +110,7 @@ const MultiStepProgramForm = ({ initialData = null, isEdit = false }) => {
           setFormData(prev => ({ ...prev, ...initialData }));
         }
       } catch (err) {
-        console.error('Error fetching data:', err);
+        // Error fetching data
       } finally {
         setLoading(false);
       }
@@ -355,11 +355,10 @@ const MultiStepProgramForm = ({ initialData = null, isEdit = false }) => {
         }, 1500);
       } else {
         const errorMessage = response.message || response.error || `Failed to ${isEdit ? 'update' : 'create'} program`;
-        console.error('Program API error:', response);
         showError('Error', errorMessage);
       }
     } catch (err) {
-      console.error('Program submission error:', err);
+      // Program submission error
       const errorMessage = err.message || err.response?.data?.message || 'Failed to save program. Please check the console for details.';
       showError('Error', errorMessage);
     } finally {

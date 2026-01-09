@@ -29,8 +29,7 @@ export default function EventDetailsPage({ params }) {
         if (response.success) {
           const data = response.data;
           setEventData(data);
-          setImageError(false); // Reset image error when event data is loaded
-          console.log('📸 Event image URL:', data.eventImage); // Debug log
+          setImageError(false);
 
           // Extract category name from populated object
           if (data.category) {
@@ -49,7 +48,6 @@ export default function EventDetailsPage({ params }) {
           setError(response.message || 'Event not found');
         }
       } catch (err) {
-        console.error('Error fetching event:', err);
         setError(err.message || 'Failed to fetch event');
       } finally {
         setLoading(false);
@@ -220,12 +218,10 @@ export default function EventDetailsPage({ params }) {
                 alt={eventData.title}
                 className="w-full h-64 object-cover rounded-lg border border-gray-200"
                 onError={(e) => {
-                  console.error('❌ Event image failed to load:', eventData.eventImage);
-                  console.error('Error event:', e);
-                  setImageError(true); // Set imageError to true on error
+                  setImageError(true);
                 }}
                 onLoad={() => {
-                  console.log('✅ Event image loaded successfully:', eventData.eventImage); // Debug log
+                  // Image loaded successfully
                 }}
               />
             </div>
