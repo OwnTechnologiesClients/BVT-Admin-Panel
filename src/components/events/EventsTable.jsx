@@ -56,7 +56,6 @@ const EventsTable = () => {
         }
       }
     } catch (err) {
-      console.error('Error fetching events:', err);
       const errorMsg = err.message || 'Failed to fetch events';
       setError(errorMsg);
       showError('Error Loading Events', errorMsg);
@@ -207,7 +206,7 @@ const EventsTable = () => {
         setUpcomingCount(response.data.upcomingEvents || 0);
       }
     } catch (err) {
-      console.error('Error fetching upcoming events count:', err);
+      // Error fetching upcoming events count
     }
   }, []);
 

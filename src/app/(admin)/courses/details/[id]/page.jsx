@@ -30,13 +30,11 @@ export default function CourseDetailsPage({ params }) {
         if (response.success) {
           setCourseData(response.data.course);
           setChapters(response.data.structure?.chapters || []);
-          setImageError(false); // Reset image error when course data is loaded
-          console.log('📸 Course image URL:', response.data.course.image);
+          setImageError(false);
         } else {
           setError(response.message || 'Course not found');
         }
       } catch (err) {
-        console.error('Error fetching course:', err);
         setError(err.message || 'Failed to fetch course');
       } finally {
         setLoading(false);
@@ -192,12 +190,10 @@ export default function CourseDetailsPage({ params }) {
                 alt={courseData.title}
                 className="w-full h-48 object-cover rounded-lg border border-gray-200"
                 onError={(e) => {
-                  console.error('❌ Image failed to load:', courseData.image);
-                  console.error('Error event:', e);
                   setImageError(true);
                 }}
                 onLoad={() => {
-                  console.log('✅ Course image loaded successfully:', courseData.image);
+                  // Image loaded successfully
                 }}
               />
             ) : (

@@ -92,7 +92,6 @@ export default function LoginPage() {
       // Display the full error message, especially for network errors
       const errorMessage = error.message || "An unexpected error occurred. Please try again.";
       setLoginError(errorMessage);
-      console.error("Login error details:", error);
     } finally {
       setIsSubmitting(false);
     }

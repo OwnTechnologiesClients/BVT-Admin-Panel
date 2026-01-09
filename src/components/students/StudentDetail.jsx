@@ -124,7 +124,6 @@ const StudentDetail = ({ student }) => {
           setError(response.message || "Failed to fetch enrollments");
         }
       } catch (err) {
-        console.error("Error fetching enrollments:", err);
         setError(err.message || "An error occurred while fetching enrollments");
       } finally {
         setLoadingEnrollments(false);
@@ -145,11 +144,9 @@ const StudentDetail = ({ student }) => {
           // Handle different response structures
           const coursesList = response.data?.courses || response.data || [];
           setAvailableCourses(coursesList);
-        } else {
-          console.error("Failed to fetch courses:", response.message);
         }
       } catch (err) {
-        console.error("Error fetching courses:", err);
+        // Error fetching courses
       } finally {
         setLoadingCourses(false);
       }
@@ -209,7 +206,6 @@ const StudentDetail = ({ student }) => {
         setError(response.message || "Failed to enroll student in course");
       }
     } catch (err) {
-      console.error("Error creating enrollment:", err);
       setError(err.message || "An error occurred while enrolling student");
     } finally {
       setLoadingCourses(false);
@@ -240,7 +236,6 @@ const StudentDetail = ({ student }) => {
           showError('Error', errorMsg);
       }
     } catch (err) {
-      console.error("Error deleting enrollment:", err);
         const errorMsg = err.message || "An error occurred while unenrolling student";
         setError(errorMsg);
         showError('Error', errorMsg);

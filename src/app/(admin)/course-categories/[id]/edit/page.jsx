@@ -45,7 +45,6 @@ export default function EditCategoryPage({ params }) {
           showError('Error', errorMsg);
         }
       } catch (err) {
-        console.error('Error fetching category:', err);
         const errorMsg = err.message || 'Failed to fetch category';
         setError(errorMsg);
         showError('Error', errorMsg);

@@ -41,16 +41,11 @@ export default function CampaignDetailsPage() {
         setCampaign(campaignRes.data);
       }
       if (logsRes.success) {
-        console.log('Email logs response:', logsRes);
-        // Handle both array and paginated response
         const logsData = Array.isArray(logsRes.data) ? logsRes.data : (logsRes.data?.data || []);
         setLogs(logsData);
-        console.log('Set logs:', logsData.length);
-      } else {
-        console.error('Failed to fetch logs:', logsRes);
       }
     } catch (error) {
-      console.error('Failed to fetch data:', error);
+      // Failed to fetch data
     } finally {
       setLoading(false);
     }
