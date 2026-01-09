@@ -118,31 +118,43 @@ axiosInstance.interceptors.response.use(
 const apiRequest = async (endpoint, options = {}, skipJsonParsing = false) => {
   try {
     const method = options.method || 'GET';
+    
+    // Build config object - start with default headers from axios instance
     const config = {
       method: method,
       url: endpoint,
-      ...options,
+      headers: {
+        ...axiosInstance.defaults.headers.common,
+        ...(options.headers || {}),
+      },
     };
 
     // Handle body - convert to data for axios
     if (options.body) {
       if (options.body instanceof FormData) {
         config.data = options.body;
+        // Don't set Content-Type for FormData (browser will set it with boundary)
+        // The interceptor will also handle this, but we do it here too for clarity
+        delete config.headers['Content-Type'];
       } else if (typeof options.body === 'string') {
         // If body is already a string, parse it if it's JSON, otherwise use as-is
         try {
           config.data = JSON.parse(options.body);
+          // Ensure Content-Type is set for JSON
+          config.headers['Content-Type'] = 'application/json';
         } catch {
           config.data = options.body;
         }
       } else {
         config.data = options.body;
+        // Ensure Content-Type is set for JSON objects
+        config.headers['Content-Type'] = 'application/json';
       }
-      delete config.body;
     }
 
-    // Remove method from config as it's already set
-    delete config.method;
+    // Merge any other options (excluding method, body, headers which we've handled)
+    const { method: _, body: __, headers: ___, ...otherOptions } = options;
+    Object.assign(config, otherOptions);
 
     const response = await axiosInstance.request(config);
     
