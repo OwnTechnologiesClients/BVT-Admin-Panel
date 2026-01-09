@@ -1,4 +1,5 @@
 // API service utility for backend communication
+import axios from 'axios';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -46,77 +47,42 @@ const setUser = (user) => {
   }
 };
 
-// Base fetch function with error handling
-const apiRequest = async (endpoint, options = {}, skipJsonParsing = false) => {
-  const token = getToken();
-  const isFormData = options.body instanceof FormData;
-  
-  const config = {
-    ...options,
-    headers: {
-      // Don't set Content-Type for FormData (browser will set it with boundary)
-      ...(!isFormData && { 'Content-Type': 'application/json' }),
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-  };
+// Create axios instance
+const axiosInstance = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
-  try {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const response = await fetch(url, config);
-
-    // Handle network errors (no response from server)
-    if (!response) {
-      throw new Error(`Unable to connect to server. Please ensure the backend is running at ${API_BASE_URL}`);
+// Request interceptor - add auth token
+axiosInstance.interceptors.request.use(
+  (config) => {
+    const token = getToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-
-    // Try to parse JSON, but handle cases where response might not be JSON
-    let data;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      data = await response.json();
-    } else if (skipJsonParsing) {
-      // If skipJsonParsing is true, return response as-is
-      const text = await response.text();
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { message: text };
-      }
-    } else {
-      const text = await response.text();
-      throw new Error(`Server returned non-JSON response: ${text}`);
+    
+    // Don't set Content-Type for FormData (browser will set it with boundary)
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
     }
+    
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
-    if (!response.ok) {
-      const errorMessage = data.message || `Server error: ${response.status} ${response.statusText}`;
-      
-      // Check for authentication/authorization errors
-      const isAuthError = 
-        response.status === 401 || // Unauthorized
-        response.status === 403 || // Forbidden
-        errorMessage.toLowerCase().includes('access denied') ||
-        errorMessage.toLowerCase().includes('required role') ||
-        errorMessage.toLowerCase().includes('invalid token') ||
-        errorMessage.toLowerCase().includes('token expired') ||
-        errorMessage.toLowerCase().includes('no token provided') ||
-        errorMessage.toLowerCase().includes('please login');
-      
-      if (isAuthError) {
-        removeToken();
-        // Redirect to login if we're not already there
-        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
-          window.location.href = '/login';
-        }
-      }
-      
-      throw new Error(errorMessage);
-    }
-
-    return data;
-  } catch (error) {
-    // Handle network errors (fetch failed)
-    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+// Response interceptor - handle errors
+axiosInstance.interceptors.response.use(
+  (response) => {
+    return response.data;
+  },
+  (error) => {
+    // Handle network errors
+    if (!error.response) {
       throw new Error(
         `Network error: Unable to connect to backend server at ${API_BASE_URL}. ` +
         `Please ensure:\n` +
@@ -125,7 +91,74 @@ const apiRequest = async (endpoint, options = {}, skipJsonParsing = false) => {
         `3. CORS is properly configured on the backend`
       );
     }
-    // Re-throw other errors
+
+    const response = error.response;
+    const data = response.data || {};
+    const errorMessage = data.message || `Server error: ${response.status} ${response.statusText}`;
+    
+    // Check for authentication/authorization errors
+    const isAuthError = 
+      response.status === 401 || // Unauthorized
+      response.status === 403 || // Forbidden
+      errorMessage.toLowerCase().includes('access denied') ||
+      errorMessage.toLowerCase().includes('required role') ||
+      errorMessage.toLowerCase().includes('invalid token') ||
+      errorMessage.toLowerCase().includes('token expired') ||
+      errorMessage.toLowerCase().includes('no token provided') ||
+      errorMessage.toLowerCase().includes('please login');
+    
+    if (isAuthError) {
+      removeToken();
+      // Redirect to login if we're not already there
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+    
+    throw new Error(errorMessage);
+  }
+);
+
+// Base axios function with error handling (maintains backward compatibility)
+const apiRequest = async (endpoint, options = {}, skipJsonParsing = false) => {
+  try {
+    const method = options.method || 'GET';
+    const config = {
+      method: method,
+      url: endpoint,
+      ...options,
+    };
+
+    // Handle body - convert to data for axios
+    if (options.body) {
+      if (options.body instanceof FormData) {
+        config.data = options.body;
+      } else if (typeof options.body === 'string') {
+        // If body is already a string, parse it if it's JSON, otherwise use as-is
+        try {
+          config.data = JSON.parse(options.body);
+        } catch {
+          config.data = options.body;
+        }
+      } else {
+        config.data = options.body;
+      }
+      delete config.body;
+    }
+
+    // Remove method from config as it's already set
+    delete config.method;
+
+    const response = await axiosInstance.request(config);
+    
+    // If skipJsonParsing, return as-is (axios already parses JSON by default)
+    if (skipJsonParsing) {
+      return response;
+    }
+
+    return response;
+  } catch (error) {
+    // Re-throw error (interceptor already handles formatting)
     throw error;
   }
 };
@@ -133,10 +166,7 @@ const apiRequest = async (endpoint, options = {}, skipJsonParsing = false) => {
 // Auth API methods
 export const authAPI = {
   login: async (email, password) => {
-    const response = await apiRequest('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+    const response = await axiosInstance.post('/auth/login', { email, password });
     
     if (response.success && response.data) {
       setToken(response.data.token);
@@ -148,9 +178,7 @@ export const authAPI = {
 
   logout: async () => {
     try {
-      await apiRequest('/auth/logout', {
-        method: 'POST',
-      });
+      await axiosInstance.post('/auth/logout');
     } catch (error) {
       // Even if logout fails on server, clear local storage
       console.error('Logout error:', error);
@@ -160,9 +188,7 @@ export const authAPI = {
   },
 
   getProfile: async () => {
-    return await apiRequest('/auth/profile', {
-      method: 'GET',
-    });
+    return await axiosInstance.get('/auth/profile');
   },
 };
 
