@@ -21,7 +21,11 @@ export default function AddCoursePage() {
     duration: "",
     level: "beginner",
     price: "",
+    priceNOK: "",
+    priceUSD: "",
     originalPrice: "",
+    originalPriceNOK: "",
+    originalPriceUSD: "",
     image: "",
     isFeatured: false,
     isOnline: true,
@@ -30,6 +34,17 @@ export default function AddCoursePage() {
     prerequisites: "",
     learningObjectives: ""
   });
+
+  // Exchange rate: 1 USD = 10.5 NOK
+  const NOK_TO_USD_RATE = 10.5;
+
+  // Calculate USD from NOK
+  const calculateUSD = (nokValue) => {
+    if (!nokValue || nokValue === "") return "";
+    const nok = parseFloat(nokValue);
+    if (isNaN(nok)) return "";
+    return (Math.round((nok / NOK_TO_USD_RATE) * 100) / 100).toFixed(2);
+  };
 
   const [errors, setErrors] = useState({});
   const [categories, setCategories] = useState([]);
@@ -85,6 +100,26 @@ export default function AddCoursePage() {
       setFormData(prev => ({
         ...prev,
         slug: slug
+      }));
+    }
+
+    // Auto-calculate USD when NOK price changes
+    if (field === 'priceNOK') {
+      const usdValue = calculateUSD(value);
+      setFormData(prev => ({
+        ...prev,
+        priceUSD: usdValue,
+        price: usdValue // Keep for backward compatibility
+      }));
+    }
+
+    // Auto-calculate USD when originalPriceNOK changes
+    if (field === 'originalPriceNOK') {
+      const usdValue = calculateUSD(value);
+      setFormData(prev => ({
+        ...prev,
+        originalPriceUSD: usdValue,
+        originalPrice: usdValue // Keep for backward compatibility
       }));
     }
 
@@ -155,9 +190,9 @@ export default function AddCoursePage() {
       newErrors.duration = "Duration is required";
     }
 
-    const priceValue = typeof formData.price === 'string' ? parseFloat(formData.price) : formData.price;
-    if (!priceValue || priceValue <= 0 || isNaN(priceValue)) {
-      newErrors.price = "Price is required and must be greater than 0";
+    const priceNOKValue = typeof formData.priceNOK === 'string' ? parseFloat(formData.priceNOK) : formData.priceNOK;
+    if (!priceNOKValue || priceNOKValue <= 0 || isNaN(priceNOKValue)) {
+      newErrors.priceNOK = "Price (NOK) is required and must be greater than 0";
     }
 
     setErrors(newErrors);
@@ -185,9 +220,9 @@ export default function AddCoursePage() {
       formDataObj.append('instructor', formData.instructor);
       formDataObj.append('duration', formData.duration.trim());
       formDataObj.append('level', formData.level);
-      formDataObj.append('price', parseFloat(formData.price));
-      if (formData.originalPrice) {
-        formDataObj.append('originalPrice', parseFloat(formData.originalPrice));
+      formDataObj.append('priceNOK', parseFloat(formData.priceNOK));
+      if (formData.originalPriceNOK) {
+        formDataObj.append('originalPriceNOK', parseFloat(formData.originalPriceNOK));
       }
       formDataObj.append('isFeatured', formData.isFeatured);
       formDataObj.append('isOnline', formData.isOnline);
@@ -354,42 +389,78 @@ export default function AddCoursePage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-gray-500">$</span>
-                <input
-                  type="number"
-                  value={formData.price}
-                  onChange={(e) => handleInputChange("price", e.target.value === "" ? "" : parseFloat(e.target.value))}
-                    className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.price ? "border-red-500" : "border-gray-300"
-                  }`}
-                  placeholder="299.99"
-                  min="0"
-                  step="0.01"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Price (NOK) <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-gray-500">kr</span>
+                  <input
+                    type="number"
+                    value={formData.priceNOK}
+                    onChange={(e) => handleInputChange("priceNOK", e.target.value === "" ? "" : parseFloat(e.target.value))}
+                      className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      errors.priceNOK ? "border-red-500" : "border-gray-300"
+                    }`}
+                    placeholder="2999.00"
+                    min="0"
+                    step="0.01"
+                  />
+                  </div>
+                  {errors.priceNOK && <p className="text-red-500 text-sm mt-1">{errors.priceNOK}</p>}
                 </div>
-                {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price}</p>}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Price (USD) <span className="text-gray-500 text-xs font-normal"></span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-gray-500">$</span>
+                  <input
+                    type="text"
+                    value={formData.priceUSD || ""}
+                    readOnly
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                    placeholder="Auto-calculated"
+                  />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Original Price <span className="text-gray-500 text-xs font-normal">(Optional)</span>
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-gray-500">$</span>
-                <input
-                  type="number"
-                  value={formData.originalPrice}
-                  onChange={(e) => handleInputChange("originalPrice", e.target.value === "" ? "" : parseFloat(e.target.value))}
-                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="399.99"
-                  min="0"
-                  step="0.01"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Original Price (NOK) <span className="text-gray-500 text-xs font-normal">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-gray-500">kr</span>
+                  <input
+                    type="number"
+                    value={formData.originalPriceNOK}
+                    onChange={(e) => handleInputChange("originalPriceNOK", e.target.value === "" ? "" : parseFloat(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="3999.00"
+                    min="0"
+                    step="0.01"
+                  />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Original Price (USD) <span className="text-gray-500 text-xs font-normal"></span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-gray-500">$</span>
+                  <input
+                    type="text"
+                    value={formData.originalPriceUSD || ""}
+                    readOnly
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                    placeholder="Auto-calculated"
+                  />
+                  </div>
                 </div>
               </div>
 

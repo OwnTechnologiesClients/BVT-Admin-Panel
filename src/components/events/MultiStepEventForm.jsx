@@ -38,6 +38,8 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
     onlineLink: "",
     registrationDeadline: "",
     cost: "",
+    costNOK: "",
+    costUSD: "",
     
     // Step 3: Speakers
     speakers: [
@@ -69,6 +71,17 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
 
   const totalSteps = 4;
 
+  // Exchange rate: 1 USD = 10.5 NOK
+  const NOK_TO_USD_RATE = 10.5;
+
+  // Calculate USD from NOK
+  const calculateUSD = (nokValue) => {
+    if (!nokValue || nokValue === "") return "";
+    const nok = parseFloat(nokValue);
+    if (isNaN(nok)) return "";
+    return (Math.round((nok / NOK_TO_USD_RATE) * 100) / 100).toFixed(2);
+  };
+
   // Fetch categories and initial data
   useEffect(() => {
     const fetchData = async () => {
@@ -91,6 +104,10 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           const eventResponse = await eventAPI.getEventById(initialData.id);
           if (eventResponse.success) {
             const event = eventResponse.data;
+            // Use costNOK if available, otherwise calculate from cost (backward compatibility)
+            const costNOK = event.costNOK?.toString() || (event.cost ? (parseFloat(event.cost) * NOK_TO_USD_RATE).toFixed(2) : "");
+            const costUSD = event.costUSD?.toString() || event.cost?.toString() || "";
+            
             setFormData({
               title: event.title || "",
               description: event.description || "",
@@ -109,7 +126,9 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
               location: event.location || "",
               onlineLink: event.onlineLink || "",
               registrationDeadline: event.registrationDeadline ? new Date(event.registrationDeadline).toISOString().slice(0, 16) : "",
-              cost: event.cost?.toString() || "",
+              cost: costUSD,
+              costNOK: costNOK,
+              costUSD: costUSD,
               speakers: event.speakers && event.speakers.length > 0 
                 ? event.speakers.map((s, idx) => ({ ...s, id: s.id || s._id || idx + 1 }))
                 : [{ id: 1, name: "", bio: "", company: "", title: "", photo: null, email: "", linkedin: "", topics: "" }],
@@ -136,6 +155,16 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
       ...prev,
       [field]: value
     }));
+
+    // Auto-calculate USD when NOK cost changes
+    if (field === 'costNOK') {
+      const usdValue = calculateUSD(value);
+      setFormData(prev => ({
+        ...prev,
+        costUSD: usdValue,
+        cost: usdValue // Keep for backward compatibility
+      }));
+    }
   };
 
   const handleAgendaChange = (index, field, value) => {
@@ -308,7 +337,11 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
         if (formData.registrationDeadline) {
           eventData.append('registrationDeadline', formData.registrationDeadline);
         }
-        eventData.append('cost', formData.cost ? parseFloat(formData.cost) : 0);
+        if (formData.costNOK) {
+          eventData.append('costNOK', parseFloat(formData.costNOK));
+        } else {
+          eventData.append('costNOK', 0);
+        }
         eventData.append('status', formData.status || 'draft');
         eventData.append('tags', JSON.stringify(formData.tags || []));
         eventData.append('speakers', JSON.stringify(speakersData));
@@ -346,7 +379,7 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           location: formData.isOnline ? undefined : formData.location,
           onlineLink: formData.isOnline ? formData.onlineLink : undefined,
           registrationDeadline: formData.registrationDeadline || undefined,
-          cost: formData.cost ? parseFloat(formData.cost) : 0,
+          costNOK: formData.costNOK ? parseFloat(formData.costNOK) : 0,
           status: formData.status || 'draft',
           tags: formData.tags || [],
           speakers: speakersData,
@@ -664,21 +697,39 @@ const MultiStepEventForm = ({ initialData = null, isEdit = false }) => {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Cost <span className="text-gray-400 text-xs">(optional)</span>
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-            <input
-              type="number"
-              value={formData.cost}
-              onChange={(e) => handleInputChange("cost", e.target.value)}
-              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="0.00"
-              min="0"
-              step="0.01"
-            />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cost (NOK) <span className="text-gray-400 text-xs">(optional)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">kr</span>
+              <input
+                type="number"
+                value={formData.costNOK}
+                onChange={(e) => handleInputChange("costNOK", e.target.value)}
+                className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Cost (USD) <span className="text-gray-400 text-xs"></span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="text"
+                value={formData.costUSD || ""}
+                readOnly
+                className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                placeholder="Auto-calculated"
+              />
+            </div>
           </div>
         </div>
       </div>
