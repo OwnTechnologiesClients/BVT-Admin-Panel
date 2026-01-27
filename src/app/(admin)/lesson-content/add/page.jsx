@@ -22,12 +22,13 @@ export default function AddLessonContentPage() {
     title: "",
     description: "",
     video: {
-      type: "upload", // "upload" or "youtube"
+      type: "upload", // "upload", "youtube", or "vimeo"
       file: null,
       filePath: "",
       fileName: "",
       duration: "",
-      youtubeUrl: ""
+      youtubeUrl: "",
+      vimeoUrl: ""
     },
     document: {
       file: null,
@@ -321,6 +322,16 @@ export default function AddLessonContentPage() {
           newErrors.youtubeUrl = "Please enter a valid YouTube URL";
         }
       }
+    } else if (formData.video.type === "vimeo") {
+      if (!formData.video.vimeoUrl || !formData.video.vimeoUrl.trim()) {
+        newErrors.vimeoUrl = "Vimeo URL is required";
+      } else {
+        // Validate Vimeo URL format
+        const vimeoRegex = /^(https?:\/\/)?(www\.)?(vimeo\.com|player\.vimeo\.com)\/.+/;
+        if (!vimeoRegex.test(formData.video.vimeoUrl.trim())) {
+          newErrors.vimeoUrl = "Please enter a valid Vimeo URL";
+        }
+      }
     }
 
     // Document is always required (Step 2)
@@ -372,6 +383,8 @@ export default function AddLessonContentPage() {
           }
         } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
           contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
+        } else if (formData.video.type === "vimeo" && formData.video.vimeoUrl) {
+          contentData.append('vimeoUrl', formData.video.vimeoUrl.trim());
         }
 
         // Append document file if it's a File
@@ -396,6 +409,7 @@ export default function AddLessonContentPage() {
           video: {
             type: formData.video.type,
             ...(formData.video.type === "youtube" && formData.video.youtubeUrl ? { youtubeUrl: formData.video.youtubeUrl.trim() } : {}),
+            ...(formData.video.type === "vimeo" && formData.video.vimeoUrl ? { vimeoUrl: formData.video.vimeoUrl.trim() } : {}),
             ...(formData.video.type === "upload" && formData.video.filePath ? { filePath: formData.video.filePath } : {})
           },
           document: null
@@ -595,17 +609,25 @@ export default function AddLessonContentPage() {
                       // Clear the other type's data
                       if (e.target.value === "upload") {
                         handleVideoChange("youtubeUrl", "");
+                        handleVideoChange("vimeoUrl", "");
                       } else {
                         handleVideoChange("file", null);
                         handleVideoChange("fileName", "");
                         handleVideoChange("filePath", "");
                         handleVideoChange("duration", "");
+                        // Clear the other URL type
+                        if (e.target.value === "youtube") {
+                          handleVideoChange("vimeoUrl", "");
+                        } else if (e.target.value === "vimeo") {
+                          handleVideoChange("youtubeUrl", "");
+                        }
                       }
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="upload">Upload Video File</option>
                     <option value="youtube">YouTube URL</option>
+                    <option value="vimeo">Vimeo URL</option>
                   </select>
                 </div>
 
@@ -670,7 +692,7 @@ export default function AddLessonContentPage() {
                     />
                   </div>
                 </div>
-                ) : (
+                ) : formData.video.type === "youtube" ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       YouTube URL <span className="text-red-500">*</span>
@@ -688,6 +710,25 @@ export default function AddLessonContentPage() {
                       Enter the full YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
                     </p>
                     {errors.youtubeUrl && <p className="text-red-500 text-sm mt-1">{errors.youtubeUrl}</p>}
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Vimeo URL <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.video.vimeoUrl || ""}
+                      onChange={(e) => handleVideoChange("vimeoUrl", e.target.value)}
+                      placeholder="https://vimeo.com/... or https://player.vimeo.com/video/..."
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        errors.vimeoUrl ? "border-red-500" : "border-gray-300"
+                      }`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter the full Vimeo URL (e.g., https://vimeo.com/123456789 or https://player.vimeo.com/video/123456789)
+                    </p>
+                    {errors.vimeoUrl && <p className="text-red-500 text-sm mt-1">{errors.vimeoUrl}</p>}
                   </div>
                 )}
 
