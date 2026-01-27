@@ -194,6 +194,7 @@ export default function ViewLessonContentPage({ params }) {
               <h2 className="text-xl font-semibold text-gray-900">Video Content</h2>
             </div>
             <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              {/* YouTube Video */}
               {content.video.type === 'youtube' && content.video.youtubeUrl ? (
                 <>
                   <div className="flex items-center justify-between">
@@ -202,6 +203,9 @@ export default function ViewLessonContentPage({ params }) {
                       <div>
                         <p className="font-medium text-gray-900">YouTube Video</p>
                         <p className="text-sm text-gray-600">Type: YouTube URL</p>
+                        {content.video.duration && (
+                          <p className="text-sm text-gray-600">Duration: {formatDuration(content.video.duration)}</p>
+                        )}
                       </div>
                     </div>
                     <a
@@ -254,29 +258,131 @@ export default function ViewLessonContentPage({ params }) {
                     })()}
                   </div>
                 </>
+              ) : content.video.type === 'vimeo' && content.video.vimeoUrl ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Video className="w-8 h-8 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-gray-900">Vimeo Video</p>
+                        <p className="text-sm text-gray-600">Type: Vimeo URL</p>
+                        {content.video.duration && (
+                          <p className="text-sm text-gray-600">Duration: {formatDuration(content.video.duration)}</p>
+                        )}
+                      </div>
+                    </div>
+                    <a
+                      href={content.video.vimeoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      Open on Vimeo
+                    </a>
+                  </div>
+                  <div className="mt-4">
+                    {/* Extract Vimeo video ID and create embed URL */}
+                    {(() => {
+                      const getVimeoVideoId = (url) => {
+                        if (!url) return null;
+                        const patterns = [
+                          /(?:vimeo\.com\/|player\.vimeo\.com\/video\/)(\d+)/,
+                          /vimeo\.com\/channels\/[^\/]+\/(\d+)/,
+                          /vimeo\.com\/groups\/[^\/]+\/videos\/(\d+)/,
+                          /vimeo\.com\/(\d+)/
+                        ];
+                        for (const pattern of patterns) {
+                          const match = url.match(pattern);
+                          if (match && match[1]) {
+                            return match[1];
+                          }
+                        }
+                        return null;
+                      };
+                      const videoId = getVimeoVideoId(content.video.vimeoUrl);
+                      const embedUrl = videoId ? `https://player.vimeo.com/video/${videoId}?autoplay=0&title=0&byline=0&portrait=0` : null;
+                      
+                      return embedUrl ? (
+                        <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-300">
+                          <iframe
+                            src={embedUrl}
+                            className="w-full h-full"
+                            frameBorder="0"
+                            allow="autoplay; fullscreen; picture-in-picture"
+                            allowFullScreen
+                            title="Vimeo video player"
+                          />
+                        </div>
+                      ) : (
+                        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <p className="text-yellow-800 text-sm">Invalid Vimeo URL format</p>
+                          <p className="text-yellow-700 text-xs mt-1">{content.video.vimeoUrl}</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </>
+              ) : content.video.type === 'upload' ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Video className="w-8 h-8 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-gray-900">{content.video.fileName || "Video file"}</p>
+                        <p className="text-sm text-gray-600">Type: Uploaded Video</p>
+                        {content.video.duration && (
+                          <p className="text-sm text-gray-600">Duration: {formatDuration(content.video.duration)}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {content.video.filePath && (
+                    <div className="mt-4">
+                      <video 
+                        src={getFileUrl(content.video.filePath)} 
+                        controls 
+                        className="w-full rounded-lg max-h-96"
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Video className="w-8 h-8 text-blue-600" />
-                  <div>
-                    <p className="font-medium text-gray-900">{content.video.fileName || "Video file"}</p>
-                    {content.video.duration && (
-                      <p className="text-sm text-gray-600">Duration: {formatDuration(content.video.duration)}</p>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Video className="w-8 h-8 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-gray-900">{content.video.fileName || "Video file"}</p>
+                        <p className="text-sm text-gray-600">Type: {content.video.type || "Unknown"}</p>
+                        {content.video.duration && (
+                          <p className="text-sm text-gray-600">Duration: {formatDuration(content.video.duration)}</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-              {content.video.filePath && (
-                <div className="mt-4">
-                  <video 
-                    src={getFileUrl(content.video.filePath)} 
-                    controls 
-                    className="w-full rounded-lg max-h-96"
-                  >
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
+                  {content.video.filePath && (
+                    <div className="mt-4">
+                      <video 
+                        src={getFileUrl(content.video.filePath)} 
+                        controls 
+                        className="w-full rounded-lg max-h-96"
+                      >
+                        Your browser does not support the video tag.
+                      </video>
+                    </div>
+                  )}
+                  {content.video.youtubeUrl && (
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-600">YouTube URL: <a href={content.video.youtubeUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{content.video.youtubeUrl}</a></p>
+                    </div>
+                  )}
+                  {content.video.vimeoUrl && (
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-600">Vimeo URL: <a href={content.video.vimeoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{content.video.vimeoUrl}</a></p>
+                    </div>
                   )}
                 </>
               )}

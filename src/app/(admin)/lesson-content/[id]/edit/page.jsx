@@ -28,7 +28,8 @@ export default function EditLessonContentPage({ params }) {
       filePath: "",
       fileName: "",
       duration: "",
-      youtubeUrl: ""
+      youtubeUrl: "",
+      vimeoUrl: ""
     },
     document: {
       file: null,
@@ -67,12 +68,13 @@ export default function EditLessonContentPage({ params }) {
             title: content.title || "",
             description: content.description || "",
             video: {
-              type: content.video?.type || (content.video?.youtubeUrl ? "youtube" : "upload"),
+              type: content.video?.type || (content.video?.youtubeUrl ? "youtube" : content.video?.vimeoUrl ? "vimeo" : "upload"),
               file: null,
               filePath: content.video?.filePath || "",
               fileName: content.video?.fileName || "",
               duration: content.video?.duration?.toString() || "",
-              youtubeUrl: content.video?.youtubeUrl || ""
+              youtubeUrl: content.video?.youtubeUrl || "",
+              vimeoUrl: content.video?.vimeoUrl || ""
             },
             document: {
               file: null,
@@ -405,6 +407,7 @@ export default function EditLessonContentPage({ params }) {
       const hasFileUploads = hasVideoFile || hasDocumentFile;
       const hasExistingVideo = formData.video.type === "upload" && formData.video.filePath && typeof formData.video.filePath === 'string' && !formData.video.filePath.startsWith('blob:');
       const hasYouTubeUrl = formData.video.type === "youtube" && formData.video.youtubeUrl && formData.video.youtubeUrl.trim();
+      const hasVimeoUrl = formData.video.type === "vimeo" && formData.video.vimeoUrl && formData.video.vimeoUrl.trim();
       const hasExistingDocument = formData.document.filePath && typeof formData.document.filePath === 'string' && !formData.document.filePath.startsWith('blob:');
 
       let contentData;
@@ -431,6 +434,8 @@ export default function EditLessonContentPage({ params }) {
           }
         } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
           contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
+        } else if (formData.video.type === "vimeo" && formData.video.vimeoUrl) {
+          contentData.append('vimeoUrl', formData.video.vimeoUrl.trim());
         }
 
         // Append document file if it's a File
@@ -456,6 +461,9 @@ export default function EditLessonContentPage({ params }) {
           video: formData.video.type === "youtube" && hasYouTubeUrl ? {
             type: "youtube",
             youtubeUrl: formData.video.youtubeUrl.trim()
+          } : formData.video.type === "vimeo" && hasVimeoUrl ? {
+            type: "vimeo",
+            vimeoUrl: formData.video.vimeoUrl.trim()
           } : hasExistingVideo ? {
             type: "upload",
             filePath: formData.video.filePath,
@@ -674,17 +682,25 @@ export default function EditLessonContentPage({ params }) {
                   // Clear the other type's data
                   if (e.target.value === "upload") {
                     handleVideoChange("youtubeUrl", "");
+                    handleVideoChange("vimeoUrl", "");
                   } else {
                     handleVideoChange("file", null);
                     handleVideoChange("fileName", "");
                     handleVideoChange("filePath", "");
                     handleVideoChange("duration", "");
+                    // Clear the other URL type
+                    if (e.target.value === "youtube") {
+                      handleVideoChange("vimeoUrl", "");
+                    } else if (e.target.value === "vimeo") {
+                      handleVideoChange("youtubeUrl", "");
+                    }
                   }
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="upload">Upload Video File</option>
                 <option value="youtube">YouTube URL</option>
+                <option value="vimeo">Vimeo URL</option>
               </select>
             </div>
 
@@ -776,7 +792,7 @@ export default function EditLessonContentPage({ params }) {
                 </div>
               </div>
             </div>
-            ) : (
+            ) : formData.video.type === "youtube" ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   YouTube URL <span className="text-red-500">*</span>
@@ -790,6 +806,22 @@ export default function EditLessonContentPage({ params }) {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   Enter the full YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vimeo URL <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.video.vimeoUrl || ""}
+                  onChange={(e) => handleVideoChange("vimeoUrl", e.target.value)}
+                  placeholder="https://vimeo.com/... or https://player.vimeo.com/video/..."
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 border-gray-300"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter the full Vimeo URL (e.g., https://vimeo.com/123456789 or https://player.vimeo.com/video/123456789)
                 </p>
               </div>
             )}
