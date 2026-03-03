@@ -68,7 +68,7 @@ export default function EditLessonContentPage({ params }) {
             title: content.title || "",
             description: content.description || "",
             video: {
-              type: content.video?.type || (content.video?.youtubeUrl ? "youtube" : content.video?.vimeoUrl ? "vimeo" : "upload"),
+              type: content.video ? (content.video.type || (content.video.youtubeUrl ? "youtube" : content.video.vimeoUrl ? "vimeo" : "upload")) : "none",
               file: null,
               filePath: content.video?.filePath || "",
               fileName: content.video?.fileName || "",
@@ -89,14 +89,14 @@ export default function EditLessonContentPage({ params }) {
         } else {
           showError('Error', response.message || 'Failed to fetch lesson content');
           setTimeout(() => {
-          router.push('/lesson-content');
+            router.push('/lesson-content');
           }, 2000);
         }
       } catch (err) {
         console.error('Error fetching lesson content:', err);
         showError('Error', err.message || 'Failed to fetch lesson content');
         setTimeout(() => {
-        router.push('/lesson-content');
+          router.push('/lesson-content');
         }, 2000);
       } finally {
         setFetching(false);
@@ -247,45 +247,45 @@ export default function EditLessonContentPage({ params }) {
   // Preserves the original structure better
   const convertTextToHTML = (text) => {
     if (!text) return "";
-    
+
     // Split into lines
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
+
     if (lines.length === 0) return "";
-    
+
     let html = '';
     let inList = false;
     let currentParagraph = [];
-    
+
     lines.forEach((line, index) => {
       const nextLine = lines[index + 1];
       const prevLine = lines[index - 1];
-      
+
       // Detect if this is a list item (bullet or numbered)
       const isListItem = /^[\u2022\u2023\u25E6\u2043\u2219\-\*\•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line);
-      
+
       // Detect if this is likely a heading (short line, maybe all caps, followed by longer text)
-      const isLikelyHeading = line.length < 80 && 
-                             (line.toUpperCase() === line || /^[A-Z]/.test(line)) &&
-                             nextLine && nextLine.length > line.length * 2;
-      
+      const isLikelyHeading = line.length < 80 &&
+        (line.toUpperCase() === line || /^[A-Z]/.test(line)) &&
+        nextLine && nextLine.length > line.length * 2;
+
       if (isListItem) {
         // Close previous paragraph if exists
         if (currentParagraph.length > 0) {
           html += `<p>${currentParagraph.join(' ')}</p>`;
           currentParagraph = [];
         }
-        
+
         // Start or continue list
         if (!inList) {
           html += '<ul>';
           inList = true;
         }
-        
+
         // Extract list item text (remove bullet/number)
         const itemText = line.replace(/^[\u2022\u2023\u25E6\u2043\u2219\-\*\•\d+\.\)]\s+/, '').trim();
         html += `<li>${itemText}</li>`;
-        
+
         // Close list only if next line is not a list item and we're moving to a different section
         const nextIsListItem = nextLine && (/^[\u2022\u2023\u25E6\u2043\u2219\-\*\•]\s+/.test(nextLine) || /^\d+[\.\)]\s+/.test(nextLine));
         if (!nextLine || (!nextIsListItem && nextLine.trim().length > 0)) {
@@ -306,35 +306,35 @@ export default function EditLessonContentPage({ params }) {
           html += '</ul>';
           inList = false;
         }
-        
+
         // Add to current paragraph
         currentParagraph.push(line);
-        
+
         // Check if we should close paragraph:
         // - Next line is empty or very different in length (might be new section)
         // - Current line ends with punctuation and next line starts with capital
-        const shouldCloseParagraph = 
-          !nextLine || 
+        const shouldCloseParagraph =
+          !nextLine ||
           (line.match(/[.!?:;]$/) && nextLine && /^[A-Z]/.test(nextLine)) ||
           (currentParagraph.length > 0 && (!nextLine || nextLine.length < 50));
-        
+
         if (shouldCloseParagraph && currentParagraph.length > 0) {
           html += `<p>${currentParagraph.join(' ')}</p>`;
           currentParagraph = [];
         }
       }
     });
-    
+
     // Close any remaining paragraph
     if (currentParagraph.length > 0) {
       html += `<p>${currentParagraph.join(' ')}</p>`;
     }
-    
+
     // Close any remaining list
     if (inList) {
       html += '</ul>';
     }
-    
+
     return html || `<p>${text.replace(/\n/g, ' ')}</p>`;
   };
 
@@ -345,7 +345,7 @@ export default function EditLessonContentPage({ params }) {
 
     try {
       setExtractingPDF(true);
-      
+
       // Extract text and page count in parallel
       const [extractedText, pageCount] = await Promise.all([
         extractTextFromPDF(file),
@@ -387,13 +387,51 @@ export default function EditLessonContentPage({ params }) {
       newErrors.title = "Content title is required";
     }
 
+    let hasVideo = false;
+    let hasText = (formData.document.file || formData.document.filePath) ||
+      (formData.document.extractedText && formData.document.extractedText.trim() && formData.document.extractedText !== '<p></p>');
+
+    if (formData.video.type === "upload") {
+      if (!formData.video.file && !formData.video.filePath) {
+        newErrors.videoFile = "Video file is required when 'Upload Video File' is selected";
+      } else {
+        hasVideo = true;
+      }
+    } else if (formData.video.type === "youtube") {
+      if (!formData.video.youtubeUrl || !formData.video.youtubeUrl.trim()) {
+        newErrors.youtubeUrl = "YouTube URL is required when 'YouTube' is selected";
+      } else {
+        const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
+        if (!youtubeRegex.test(formData.video.youtubeUrl.trim())) {
+          newErrors.youtubeUrl = "Please enter a valid YouTube URL";
+        } else {
+          hasVideo = true;
+        }
+      }
+    } else if (formData.video.type === "vimeo") {
+      if (!formData.video.vimeoUrl || !formData.video.vimeoUrl.trim()) {
+        newErrors.vimeoUrl = "Vimeo URL is required when 'Vimeo' is selected";
+      } else {
+        const vimeoRegex = /^(https?:\/\/)?(www\.)?(vimeo\.com|player\.vimeo\.com)\/.+/;
+        if (!vimeoRegex.test(formData.video.vimeoUrl.trim())) {
+          newErrors.vimeoUrl = "Please enter a valid Vimeo URL";
+        } else {
+          hasVideo = true;
+        }
+      }
+    }
+
+    if (!hasVideo && !hasText) {
+      newErrors.general = "Please provide at least a video or some text content.";
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -408,7 +446,7 @@ export default function EditLessonContentPage({ params }) {
       const hasExistingVideo = formData.video.type === "upload" && formData.video.filePath && typeof formData.video.filePath === 'string' && !formData.video.filePath.startsWith('blob:');
       const hasYouTubeUrl = formData.video.type === "youtube" && formData.video.youtubeUrl && formData.video.youtubeUrl.trim();
       const hasVimeoUrl = formData.video.type === "vimeo" && formData.video.vimeoUrl && formData.video.vimeoUrl.trim();
-      const hasExistingDocument = formData.document.filePath && typeof formData.document.filePath === 'string' && !formData.document.filePath.startsWith('blob:');
+      const hasExtractedText = formData.document.extractedText && formData.document.extractedText.trim() && formData.document.extractedText !== '<p></p>';
 
       let contentData;
 
@@ -426,30 +464,64 @@ export default function EditLessonContentPage({ params }) {
         contentData.append('isActive', formData.isActive);
 
         // Append video data
-        contentData.append('videoType', formData.video.type);
-        if (formData.video.type === "upload" && hasVideoFile) {
-          contentData.append('video', formData.video.file);
-          if (formData.video.duration) {
-            contentData.append('videoDuration', parseInt(formData.video.duration));
+        if (formData.video.type !== "none") {
+          contentData.append('videoType', formData.video.type);
+          if (formData.video.type === "upload" && hasVideoFile) {
+            contentData.append('video', formData.video.file);
+            if (formData.video.duration) {
+              contentData.append('videoDuration', parseInt(formData.video.duration));
+            }
+          } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
+            contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
+          } else if (formData.video.type === "vimeo" && formData.video.vimeoUrl) {
+            contentData.append('vimeoUrl', formData.video.vimeoUrl.trim());
           }
-        } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
-          contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
-        } else if (formData.video.type === "vimeo" && formData.video.vimeoUrl) {
-          contentData.append('vimeoUrl', formData.video.vimeoUrl.trim());
+        } else {
+          contentData.append('videoType', 'none');
         }
 
         // Append document file if it's a File
         if (hasDocumentFile) {
           contentData.append('document', formData.document.file);
-          if (formData.document.extractedText) {
-            contentData.append('extractedText', formData.document.extractedText);
-          }
-          if (formData.document.pageCount) {
-            contentData.append('pageCount', parseInt(formData.document.pageCount));
-          }
+        }
+        if (hasExtractedText) {
+          contentData.append('extractedText', formData.document.extractedText);
+        }
+        if (formData.document.pageCount) {
+          contentData.append('pageCount', parseInt(formData.document.pageCount));
         }
       } else {
         // Use plain object if no file uploads
+        let videoData = null;
+        if (formData.video.type !== "none") {
+          if (formData.video.type === "youtube" && hasYouTubeUrl) {
+            videoData = { type: "youtube", youtubeUrl: formData.video.youtubeUrl.trim() };
+          } else if (formData.video.type === "vimeo" && hasVimeoUrl) {
+            videoData = { type: "vimeo", vimeoUrl: formData.video.vimeoUrl.trim() };
+          } else if (formData.video.type === "upload" && hasExistingVideo) {
+            videoData = {
+              type: "upload",
+              filePath: formData.video.filePath,
+              fileName: formData.video.fileName,
+              duration: formData.video.duration ? parseInt(formData.video.duration) : undefined
+            };
+          }
+        }
+
+        let documentData = null;
+        if (formData.document.filePath && typeof formData.document.filePath === 'string' && !formData.document.filePath.startsWith('blob:')) {
+          documentData = {
+            filePath: formData.document.filePath,
+            fileName: formData.document.fileName,
+            extractedText: formData.document.extractedText,
+            pageCount: formData.document.pageCount ? parseInt(formData.document.pageCount) : undefined
+          };
+        } else if (hasExtractedText) {
+          documentData = {
+            extractedText: formData.document.extractedText
+          };
+        }
+
         contentData = {
           courseId: formData.courseId,
           chapterId: formData.chapterId,
@@ -458,24 +530,8 @@ export default function EditLessonContentPage({ params }) {
           description: formData.description?.trim() || "",
           isRequired: formData.isRequired,
           isActive: formData.isActive,
-          video: formData.video.type === "youtube" && hasYouTubeUrl ? {
-            type: "youtube",
-            youtubeUrl: formData.video.youtubeUrl.trim()
-          } : formData.video.type === "vimeo" && hasVimeoUrl ? {
-            type: "vimeo",
-            vimeoUrl: formData.video.vimeoUrl.trim()
-          } : hasExistingVideo ? {
-            type: "upload",
-            filePath: formData.video.filePath,
-            fileName: formData.video.fileName,
-            duration: formData.video.duration ? parseInt(formData.video.duration) : undefined
-          } : null,
-          document: hasExistingDocument ? {
-            filePath: formData.document.filePath,
-            fileName: formData.document.fileName,
-            extractedText: formData.document.extractedText,
-            pageCount: formData.document.pageCount ? parseInt(formData.document.pageCount) : undefined
-          } : null
+          video: videoData,
+          document: documentData
         };
       }
 
@@ -484,7 +540,7 @@ export default function EditLessonContentPage({ params }) {
       if (response.success) {
         showSuccess('Lesson Content Updated!', 'The lesson content has been updated successfully.');
         setTimeout(() => {
-        router.push('/lesson-content');
+          router.push('/lesson-content');
         }, 1500);
       } else {
         showError('Error', response.message || 'Failed to update lesson content');
@@ -507,7 +563,7 @@ export default function EditLessonContentPage({ params }) {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb 
+      <PageBreadcrumb
         pageTitle="Edit Lesson Content"
         breadcrumbs={[
           { label: "Home", href: "/" },
@@ -538,9 +594,8 @@ export default function EditLessonContentPage({ params }) {
                   value={formData.courseId}
                   onChange={(e) => handleInputChange("courseId", e.target.value)}
                   disabled={loading}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.courseId ? "border-red-500" : "border-gray-300"
-                  } ${loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.courseId ? "border-red-500" : "border-gray-300"
+                    } ${loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
                 >
                   <option value="">Select a course</option>
                   {courses.map(course => (
@@ -560,9 +615,8 @@ export default function EditLessonContentPage({ params }) {
                   value={formData.chapterId}
                   onChange={(e) => handleInputChange("chapterId", e.target.value)}
                   disabled={!formData.courseId || loading}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.chapterId ? "border-red-500" : "border-gray-300"
-                  } ${!formData.courseId || loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.chapterId ? "border-red-500" : "border-gray-300"
+                    } ${!formData.courseId || loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
                 >
                   <option value="">
                     {formData.courseId ? (loading ? "Loading chapters..." : "Select a chapter") : "Select a course first"}
@@ -584,9 +638,8 @@ export default function EditLessonContentPage({ params }) {
                   value={formData.lessonId}
                   onChange={(e) => handleInputChange("lessonId", e.target.value)}
                   disabled={!formData.chapterId || loading}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.lessonId ? "border-red-500" : "border-gray-300"
-                  } ${!formData.chapterId || loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.lessonId ? "border-red-500" : "border-gray-300"
+                    } ${!formData.chapterId || loading ? "bg-gray-100 cursor-not-allowed" : ""}`}
                 >
                   <option value="">
                     {formData.chapterId ? (loading ? "Loading lessons..." : "Select a lesson") : "Select a chapter first"}
@@ -611,9 +664,8 @@ export default function EditLessonContentPage({ params }) {
                   type="text"
                   value={formData.title}
                   onChange={(e) => handleInputChange("title", e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.title ? "border-red-500" : "border-gray-300"
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.title ? "border-red-500" : "border-gray-300"
+                    }`}
                   placeholder="Enter content title"
                 />
                 {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
@@ -669,14 +721,14 @@ export default function EditLessonContentPage({ params }) {
               <Video className="w-5 h-5" />
               Video Content
             </h3>
-            
+
             {/* Video Type Selection */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Video Source <span className="text-red-500">*</span>
+                Video Source
               </label>
               <select
-                value={formData.video.type || "upload"}
+                value={formData.video.type || "none"}
                 onChange={(e) => {
                   handleVideoChange("type", e.target.value);
                   // Clear the other type's data
@@ -698,100 +750,108 @@ export default function EditLessonContentPage({ params }) {
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
+                <option value="none">No Video</option>
                 <option value="upload">Upload Video File</option>
                 <option value="youtube">YouTube URL</option>
                 <option value="vimeo">Vimeo URL</option>
               </select>
             </div>
 
-            {formData.video.type === "upload" ? (
-            <div className="space-y-4">
+            {errors.general && <p className="text-red-500 text-sm mb-4 font-medium">{errors.general}</p>}
+
+            {formData.video.type === "none" ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-gray-500">
+                <Video className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                <p>No video will be included in this lesson content.</p>
+              </div>
+            ) : formData.video.type === "upload" ? (
+              <div className="space-y-4">
                 {formData.video.filePath && !formData.video.filePath.startsWith('blob:') ? (
-                <div className="relative group">
-                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <Video className="w-8 h-8 text-blue-600" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{formData.video.fileName || 'Video file'}</p>
-                      {formData.video.duration && (
-                        <p className="text-xs text-gray-500">Duration: {formData.video.duration} seconds</p>
-                      )}
+                  <div className="relative group">
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <Video className="w-8 h-8 text-blue-600" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">{formData.video.fileName || 'Video file'}</p>
+                        {formData.video.duration && (
+                          <p className="text-xs text-gray-500">Duration: {formData.video.duration} seconds</p>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={removeVideo}
+                        className="text-red-600 border-red-200 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={removeVideo}
-                      className="text-red-600 border-red-200 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
                   </div>
-                </div>
-              ) : null}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {formData.video.filePath && !formData.video.filePath.startsWith('blob:') ? "Replace Video File" : "Upload Video File"}
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept="video/*"
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        setFormData(prev => ({
-                          ...prev,
-                          video: {
-                            ...prev.video,
-                            file: file,
-                            fileName: file.name,
-                            filePath: URL.createObjectURL(file) // For preview
-                          }
-                        }));
-                        
-                        // Auto-calculate video duration
-                        const video = document.createElement('video');
-                        video.preload = 'metadata';
-                        video.onloadedmetadata = () => {
-                          window.URL.revokeObjectURL(video.src);
-                          const duration = Math.round(video.duration);
-                          handleVideoChange("duration", duration);
-                        };
-                        video.onerror = () => {
-                          console.error('Error loading video metadata');
-                        };
-                        video.src = URL.createObjectURL(file);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300"
-                  />
-                </div>
-                {formData.video.fileName && !formData.video.filePath?.startsWith('http') && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    Selected: {formData.video.fileName}
-                  </p>
-                )}
-                <div className="mt-2">
+                ) : null}
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Duration (seconds) <span className="text-gray-400 text-xs">(auto-calculated)</span>
+                    {formData.video.filePath && !formData.video.filePath.startsWith('blob:') ? "Replace Video File" : "Upload Video File"}
                   </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.video.duration || ''}
-                    onChange={(e) => handleVideoChange("duration", e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
-                    placeholder="Will be calculated from video"
-                    readOnly={!!formData.video.file}
-                  />
-                  {formData.video.file && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Duration is automatically calculated from the video file. To change it, remove and re-upload the video.
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          setFormData(prev => ({
+                            ...prev,
+                            video: {
+                              ...prev.video,
+                              file: file,
+                              fileName: file.name,
+                              filePath: URL.createObjectURL(file) // For preview
+                            }
+                          }));
+
+                          // Auto-calculate video duration
+                          const video = document.createElement('video');
+                          video.preload = 'metadata';
+                          video.onloadedmetadata = () => {
+                            window.URL.revokeObjectURL(video.src);
+                            const duration = Math.round(video.duration);
+                            handleVideoChange("duration", duration);
+                          };
+                          video.onerror = () => {
+                            console.error('Error loading video metadata');
+                          };
+                          video.src = URL.createObjectURL(file);
+                        }
+                      }}
+                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border-gray-300"
+                    />
+                  </div>
+                  {formData.video.fileName && !formData.video.filePath?.startsWith('http') && (
+                    <p className="text-sm text-gray-600 mt-2">
+                      Selected: {formData.video.fileName}
                     </p>
                   )}
+                  <div className="mt-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Duration (seconds) <span className="text-gray-400 text-xs">(auto-calculated)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.video.duration || ''}
+                      onChange={(e) => handleVideoChange("duration", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
+                      placeholder="Will be calculated from video"
+                      readOnly={!!formData.video.file}
+                    />
+                    {formData.video.file && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Duration is automatically calculated from the video file. To change it, remove and re-upload the video.
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
             ) : formData.video.type === "youtube" ? (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -858,7 +918,7 @@ export default function EditLessonContentPage({ params }) {
               ) : null}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {formData.document.filePath ? "Replace PDF/File" : "Upload PDF/File"} <span className="text-red-500">*</span>
+                  {formData.document.filePath ? "Replace PDF/File" : "Upload PDF/File"}
                 </label>
                 <input
                   type="file"
@@ -875,7 +935,7 @@ export default function EditLessonContentPage({ params }) {
                           filePath: URL.createObjectURL(file) // For preview
                         }
                       }));
-                      
+
                       // Extract text from PDF if it's a PDF file
                       if (file.type === "application/pdf") {
                         await extractPDFText(file);
@@ -915,7 +975,7 @@ export default function EditLessonContentPage({ params }) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Extracted Text Content (Editable)
                   </label>
-                  
+
                   {extractingPDF ? (
                     <div className="border border-gray-300 rounded-lg p-8 text-center">
                       <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />

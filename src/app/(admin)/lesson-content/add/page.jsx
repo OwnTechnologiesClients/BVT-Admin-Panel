@@ -22,7 +22,7 @@ export default function AddLessonContentPage() {
     title: "",
     description: "",
     video: {
-      type: "upload", // "upload", "youtube", or "vimeo"
+      type: "none", // "upload", "youtube", "vimeo", or "none"
       file: null,
       filePath: "",
       fileName: "",
@@ -166,45 +166,45 @@ export default function AddLessonContentPage() {
   // Preserves the original structure better
   const convertTextToHTML = (text) => {
     if (!text) return "";
-    
+
     // Split into lines
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
+
     if (lines.length === 0) return "";
-    
+
     let html = '';
     let inList = false;
     let currentParagraph = [];
-    
+
     lines.forEach((line, index) => {
       const nextLine = lines[index + 1];
       const prevLine = lines[index - 1];
-      
+
       // Detect if this is a list item (bullet or numbered)
       const isListItem = /^[\u2022\u2023\u25E6\u2043\u2219\-\*\•]\s+/.test(line) || /^\d+[\.\)]\s+/.test(line);
-      
+
       // Detect if this is likely a heading (short line, maybe all caps, followed by longer text)
-      const isLikelyHeading = line.length < 80 && 
-                             (line.toUpperCase() === line || /^[A-Z]/.test(line)) &&
-                             nextLine && nextLine.length > line.length * 2;
-      
+      const isLikelyHeading = line.length < 80 &&
+        (line.toUpperCase() === line || /^[A-Z]/.test(line)) &&
+        nextLine && nextLine.length > line.length * 2;
+
       if (isListItem) {
         // Close previous paragraph if exists
         if (currentParagraph.length > 0) {
           html += `<p>${currentParagraph.join(' ')}</p>`;
           currentParagraph = [];
         }
-        
+
         // Start or continue list
         if (!inList) {
           html += '<ul>';
           inList = true;
         }
-        
+
         // Extract list item text (remove bullet/number)
         const itemText = line.replace(/^[\u2022\u2023\u25E6\u2043\u2219\-\*\•\d+\.\)]\s+/, '').trim();
         html += `<li>${itemText}</li>`;
-        
+
         // Close list only if next line is not a list item and we're moving to a different section
         const nextIsListItem = nextLine && (/^[\u2022\u2023\u25E6\u2043\u2219\-\*\•]\s+/.test(nextLine) || /^\d+[\.\)]\s+/.test(nextLine));
         if (!nextLine || (!nextIsListItem && nextLine.trim().length > 0)) {
@@ -225,35 +225,35 @@ export default function AddLessonContentPage() {
           html += '</ul>';
           inList = false;
         }
-        
+
         // Add to current paragraph
         currentParagraph.push(line);
-        
+
         // Check if we should close paragraph:
         // - Next line is empty or very different in length (might be new section)
         // - Current line ends with punctuation and next line starts with capital
-        const shouldCloseParagraph = 
-          !nextLine || 
+        const shouldCloseParagraph =
+          !nextLine ||
           (line.match(/[.!?:;]$/) && nextLine && /^[A-Z]/.test(nextLine)) ||
           (currentParagraph.length > 0 && (!nextLine || nextLine.length < 50));
-        
+
         if (shouldCloseParagraph && currentParagraph.length > 0) {
           html += `<p>${currentParagraph.join(' ')}</p>`;
           currentParagraph = [];
         }
       }
     });
-    
+
     // Close any remaining paragraph
     if (currentParagraph.length > 0) {
       html += `<p>${currentParagraph.join(' ')}</p>`;
     }
-    
+
     // Close any remaining list
     if (inList) {
       html += '</ul>';
     }
-    
+
     return html || `<p>${text.replace(/\n/g, ' ')}</p>`;
   };
 
@@ -264,13 +264,13 @@ export default function AddLessonContentPage() {
 
     try {
       setExtractingPDF(true);
-      
+
       // Extract text and page count in parallel
       const [extractedText, pageCount] = await Promise.all([
         extractTextFromPDF(file),
         getPDFPageCount(file)
       ]);
-    
+
       // Convert plain text to HTML format for Tiptap editor
       const htmlContent = convertTextToHTML(extractedText);
 
@@ -306,40 +306,43 @@ export default function AddLessonContentPage() {
       newErrors.title = "Content title is required";
     }
 
-    // Video is always required (Step 1)
-    // Validate video based on type
+    let hasVideo = false;
+    let hasText = (formData.document.file || formData.document.filePath) ||
+      (formData.document.extractedText && formData.document.extractedText.trim() && formData.document.extractedText !== '<p></p>');
+
     if (formData.video.type === "upload") {
-    if (!formData.video.file && !formData.video.filePath) {
-      newErrors.videoFile = "Video file is required";
+      if (!formData.video.file && !formData.video.filePath) {
+        newErrors.videoFile = "Video file is required when 'Upload Video File' is selected";
+      } else {
+        hasVideo = true;
       }
     } else if (formData.video.type === "youtube") {
       if (!formData.video.youtubeUrl || !formData.video.youtubeUrl.trim()) {
-        newErrors.youtubeUrl = "YouTube URL is required";
+        newErrors.youtubeUrl = "YouTube URL is required when 'YouTube' is selected";
       } else {
-        // Validate YouTube URL format
         const youtubeRegex = /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/;
         if (!youtubeRegex.test(formData.video.youtubeUrl.trim())) {
           newErrors.youtubeUrl = "Please enter a valid YouTube URL";
+        } else {
+          hasVideo = true;
         }
       }
     } else if (formData.video.type === "vimeo") {
       if (!formData.video.vimeoUrl || !formData.video.vimeoUrl.trim()) {
-        newErrors.vimeoUrl = "Vimeo URL is required";
+        newErrors.vimeoUrl = "Vimeo URL is required when 'Vimeo' is selected";
       } else {
-        // Validate Vimeo URL format
         const vimeoRegex = /^(https?:\/\/)?(www\.)?(vimeo\.com|player\.vimeo\.com)\/.+/;
         if (!vimeoRegex.test(formData.video.vimeoUrl.trim())) {
           newErrors.vimeoUrl = "Please enter a valid Vimeo URL";
+        } else {
+          hasVideo = true;
         }
       }
     }
 
-    // Document is always required (Step 2)
-    if (!formData.document.file && !formData.document.filePath) {
-      newErrors.documentFile = "Document file is required";
+    if (!hasVideo && !hasText) {
+      newErrors.general = "Please provide at least a video or some text content.";
     }
-    
-    // Remove isRequired validation - it's no longer a field
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -347,7 +350,7 @@ export default function AddLessonContentPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -359,6 +362,7 @@ export default function AddLessonContentPage() {
       const hasVideoFile = formData.video.type === "upload" && formData.video.file && formData.video.file instanceof File;
       const hasDocumentFile = formData.document.file && formData.document.file instanceof File;
       const hasFileUploads = hasVideoFile || hasDocumentFile;
+      const hasExtractedText = formData.document.extractedText && formData.document.extractedText.trim() && formData.document.extractedText !== '<p></p>';
 
       let contentData;
 
@@ -375,30 +379,34 @@ export default function AddLessonContentPage() {
         contentData.append('isActive', formData.isActive);
 
         // Append video data
-        contentData.append('videoType', formData.video.type);
-        if (formData.video.type === "upload" && hasVideoFile) {
-          contentData.append('video', formData.video.file);
-          if (formData.video.duration) {
-            contentData.append('videoDuration', parseInt(formData.video.duration));
+        if (formData.video.type !== "none") {
+          contentData.append('videoType', formData.video.type);
+          if (formData.video.type === "upload" && hasVideoFile) {
+            contentData.append('video', formData.video.file);
+            if (formData.video.duration) {
+              contentData.append('videoDuration', parseInt(formData.video.duration));
+            }
+          } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
+            contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
+          } else if (formData.video.type === "vimeo" && formData.video.vimeoUrl) {
+            contentData.append('vimeoUrl', formData.video.vimeoUrl.trim());
           }
-        } else if (formData.video.type === "youtube" && formData.video.youtubeUrl) {
-          contentData.append('youtubeUrl', formData.video.youtubeUrl.trim());
-        } else if (formData.video.type === "vimeo" && formData.video.vimeoUrl) {
-          contentData.append('vimeoUrl', formData.video.vimeoUrl.trim());
+        } else {
+          contentData.append('videoType', 'none');
         }
 
         // Append document file if it's a File
         if (hasDocumentFile) {
           contentData.append('document', formData.document.file);
-          if (formData.document.extractedText) {
-            contentData.append('extractedText', formData.document.extractedText);
-          }
-          if (formData.document.pageCount) {
-            contentData.append('pageCount', parseInt(formData.document.pageCount));
-          }
+        }
+        if (hasExtractedText) {
+          contentData.append('extractedText', formData.document.extractedText);
+        }
+        if (formData.document.pageCount) {
+          contentData.append('pageCount', parseInt(formData.document.pageCount));
         }
       } else {
-        // Use plain object if no file uploads (shouldn't happen for add page, but handle it)
+        // Use plain object if no file uploads
         contentData = {
           courseId: formData.courseId,
           chapterId: formData.chapterId,
@@ -406,13 +414,15 @@ export default function AddLessonContentPage() {
           title: formData.title.trim(),
           description: formData.description?.trim() || "",
           isActive: formData.isActive,
-          video: {
+          video: formData.video.type === "none" ? null : {
             type: formData.video.type,
             ...(formData.video.type === "youtube" && formData.video.youtubeUrl ? { youtubeUrl: formData.video.youtubeUrl.trim() } : {}),
             ...(formData.video.type === "vimeo" && formData.video.vimeoUrl ? { vimeoUrl: formData.video.vimeoUrl.trim() } : {}),
             ...(formData.video.type === "upload" && formData.video.filePath ? { filePath: formData.video.filePath } : {})
           },
-          document: null
+          document: hasExtractedText ? {
+            extractedText: formData.document.extractedText
+          } : null
         };
       }
 
@@ -421,7 +431,7 @@ export default function AddLessonContentPage() {
       if (response.success) {
         showSuccess('Lesson Content Created!', 'The lesson content has been created successfully.');
         setTimeout(() => {
-        router.push('/lesson-content');
+          router.push('/lesson-content');
         }, 1500);
       } else {
         showError('Error', response.message || 'Failed to create lesson content');
@@ -436,7 +446,7 @@ export default function AddLessonContentPage() {
 
   return (
     <div className="space-y-6">
-      <PageBreadcrumb 
+      <PageBreadcrumb
         pageTitle="Add Lesson Content"
         breadcrumbs={[
           { label: "Home", href: "/" },
@@ -529,9 +539,8 @@ export default function AddLessonContentPage() {
                   type="text"
                   value={formData.title}
                   onChange={(e) => handleInputChange("title", e.target.value)}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.title ? "border-red-500" : "border-gray-300"
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.title ? "border-red-500" : "border-gray-300"
+                    }`}
                   placeholder="Enter content title"
                 />
                 {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
@@ -553,7 +562,7 @@ export default function AddLessonContentPage() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Active Status <span className="text-gray-400 text-xs">(optional)</span>
-                  </label>
+                </label>
                 <select
                   value={formData.isActive ? "true" : "false"}
                   onChange={(e) => handleInputChange("isActive", e.target.value === "true")}
@@ -571,18 +580,16 @@ export default function AddLessonContentPage() {
             {/* Step Indicators */}
             <div className="flex items-center justify-center gap-4 mb-6">
               <div className={`flex items-center gap-2 ${currentStep === 1 ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  currentStep === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
-                }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+                  }`}>
                   1
                 </div>
                 <span>Video</span>
               </div>
               <div className="w-16 h-0.5 bg-gray-300"></div>
               <div className={`flex items-center gap-2 ${currentStep === 2 ? 'text-blue-600 font-semibold' : 'text-gray-400'}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  currentStep === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'
-                }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'
+                  }`}>
                   2
                 </div>
                 <span>Text</span>
@@ -596,14 +603,14 @@ export default function AddLessonContentPage() {
                   <Video className="w-5 h-5 text-blue-600" />
                   <h3 className="text-lg font-semibold text-gray-900">Video Content</h3>
                 </div>
-                
+
                 {/* Video Type Selection */}
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Video Source <span className="text-red-500">*</span>
+                    Video Source
                   </label>
                   <select
-                    value={formData.video.type || "upload"}
+                    value={formData.video.type || "none"}
                     onChange={(e) => {
                       handleVideoChange("type", e.target.value);
                       // Clear the other type's data
@@ -625,73 +632,80 @@ export default function AddLessonContentPage() {
                     }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
+                    <option value="none">No Video</option>
                     <option value="upload">Upload Video File</option>
                     <option value="youtube">YouTube URL</option>
                     <option value="vimeo">Vimeo URL</option>
                   </select>
                 </div>
 
-                {formData.video.type === "upload" ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload Video File <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center gap-2">
+                {errors.general && <p className="text-red-500 text-sm mt-2 font-medium">{errors.general}</p>}
+
+                {formData.video.type === "none" ? (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-gray-500">
+                    <Video className="w-12 h-12 mx-auto text-gray-300 mb-2" />
+                    <p>No video will be included in this lesson content.</p>
+                  </div>
+                ) : formData.video.type === "upload" ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Upload Video File <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="file"
+                          accept="video/*"
+                          onChange={(e) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              // Store file object for upload
+                              setFormData(prev => ({
+                                ...prev,
+                                video: {
+                                  ...prev.video,
+                                  file: file,
+                                  fileName: file.name,
+                                  filePath: URL.createObjectURL(file) // For preview
+                                }
+                              }));
+
+                              // Auto-calculate video duration
+                              const video = document.createElement('video');
+                              video.preload = 'metadata';
+                              video.onloadedmetadata = () => {
+                                window.URL.revokeObjectURL(video.src);
+                                const duration = Math.round(video.duration);
+                                handleVideoChange("duration", duration);
+                              };
+                              video.src = URL.createObjectURL(file);
+                            }
+                          }}
+                          className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${errors.videoFile ? "border-red-500" : "border-gray-300"
+                            }`}
+                        />
+                      </div>
+                      {formData.video.fileName && (
+                        <p className="text-sm text-gray-600 mt-2">
+                          Selected: {formData.video.fileName}
+                        </p>
+                      )}
+                      {errors.videoFile && <p className="text-red-500 text-sm mt-1">{errors.videoFile}</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Duration (seconds) <span className="text-gray-400 text-xs">(auto-calculated)</span>
+                      </label>
                       <input
-                        type="file"
-                        accept="video/*"
-                        onChange={(e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            // Store file object for upload
-                            setFormData(prev => ({
-                              ...prev,
-                              video: {
-                                ...prev.video,
-                                file: file,
-                                fileName: file.name,
-                                filePath: URL.createObjectURL(file) // For preview
-                              }
-                            }));
-                            
-                            // Auto-calculate video duration
-                            const video = document.createElement('video');
-                            video.preload = 'metadata';
-                            video.onloadedmetadata = () => {
-                              window.URL.revokeObjectURL(video.src);
-                              const duration = Math.round(video.duration);
-                              handleVideoChange("duration", duration);
-                            };
-                            video.src = URL.createObjectURL(file);
-                          }
-                        }}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${
-                          errors.videoFile ? "border-red-500" : "border-gray-300"
-                        }`}
+                        type="number"
+                        value={formData.video.duration || ""}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                        placeholder="Will be calculated from video"
                       />
                     </div>
-                    {formData.video.fileName && (
-                      <p className="text-sm text-gray-600 mt-2">
-                        Selected: {formData.video.fileName}
-                      </p>
-                    )}
-                    {errors.videoFile && <p className="text-red-500 text-sm mt-1">{errors.videoFile}</p>}
                   </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Duration (seconds) <span className="text-gray-400 text-xs">(auto-calculated)</span>
-                    </label>
-                    <input
-                      type="number"
-                        value={formData.video.duration || ""}
-                      readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
-                      placeholder="Will be calculated from video"
-                    />
-                  </div>
-                </div>
                 ) : formData.video.type === "youtube" ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -702,9 +716,8 @@ export default function AddLessonContentPage() {
                       value={formData.video.youtubeUrl || ""}
                       onChange={(e) => handleVideoChange("youtubeUrl", e.target.value)}
                       placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.youtubeUrl ? "border-red-500" : "border-gray-300"
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.youtubeUrl ? "border-red-500" : "border-gray-300"
+                        }`}
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Enter the full YouTube URL (e.g., https://www.youtube.com/watch?v=VIDEO_ID or https://youtu.be/VIDEO_ID)
@@ -721,9 +734,8 @@ export default function AddLessonContentPage() {
                       value={formData.video.vimeoUrl || ""}
                       onChange={(e) => handleVideoChange("vimeoUrl", e.target.value)}
                       placeholder="https://vimeo.com/... or https://player.vimeo.com/video/..."
-                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.vimeoUrl ? "border-red-500" : "border-gray-300"
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${errors.vimeoUrl ? "border-red-500" : "border-gray-300"
+                        }`}
                     />
                     <p className="text-xs text-gray-500 mt-1">
                       Enter the full Vimeo URL (e.g., https://vimeo.com/123456789 or https://player.vimeo.com/video/123456789)
@@ -747,50 +759,49 @@ export default function AddLessonContentPage() {
                   <FileText className="w-5 h-5 text-green-600" />
                   <h3 className="text-lg font-semibold text-gray-900">Text Content</h3>
                 </div>
-                
+
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Upload PDF/File <span className="text-red-500">*</span>
+                      Upload PDF/File
                     </label>
-                      <input
-                        type="file"
-                        accept=".pdf,.doc,.docx,.txt"
-                        onChange={async (e) => {
-                          const file = e.target.files[0];
-                          if (file) {
-                            // Store file object for upload
-                            setFormData(prev => ({
-                              ...prev,
-                              document: {
-                                ...prev.document,
-                                file: file,
-                                fileName: file.name,
-                                filePath: URL.createObjectURL(file) // For preview
-                              }
-                            }));
-                            
-                            // Extract text from PDF if it's a PDF file
-                            if (file.type === "application/pdf") {
-                              await extractPDFText(file);
-                            } else if (file.type === "text/plain") {
-                              // For text files, read directly
-                              const reader = new FileReader();
-                              reader.onload = (e) => {
-                                handleDocumentChange("extractedText", e.target.result);
-                              };
-                              reader.readAsText(file);
-                            } else {
-                              // For other file types, clear extracted text
-                              handleDocumentChange("extractedText", "");
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt"
+                      onChange={async (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          // Store file object for upload
+                          setFormData(prev => ({
+                            ...prev,
+                            document: {
+                              ...prev.document,
+                              file: file,
+                              fileName: file.name,
+                              filePath: URL.createObjectURL(file) // For preview
                             }
+                          }));
+
+                          // Extract text from PDF if it's a PDF file
+                          if (file.type === "application/pdf") {
+                            await extractPDFText(file);
+                          } else if (file.type === "text/plain") {
+                            // For text files, read directly
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                              handleDocumentChange("extractedText", e.target.result);
+                            };
+                            reader.readAsText(file);
+                          } else {
+                            // For other file types, clear extracted text
+                            handleDocumentChange("extractedText", "");
                           }
-                        }}
-                        disabled={extractingPDF}
-                        className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${
-                          errors.documentFile ? "border-red-500" : "border-gray-300"
+                        }
+                      }}
+                      disabled={extractingPDF}
+                      className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 ${errors.documentFile ? "border-red-500" : "border-gray-300"
                         }`}
-                      />
+                    />
                     {formData.document.fileName && (
                       <p className="text-sm text-gray-600 mt-2">
                         Selected: {formData.document.fileName}
@@ -812,15 +823,15 @@ export default function AddLessonContentPage() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Extracted Text Content (Editable) *
+                      Extracted Text Content (Editable)
                     </label>
-                    
+
                     {extractingPDF ? (
                       <div className="border border-gray-300 rounded-lg p-8 text-center">
                         <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
                         <p className="text-sm text-gray-600">Extracting text from PDF...</p>
                         <p className="text-xs text-gray-500 mt-1">This may take a moment for large PDFs</p>
-                    </div>
+                      </div>
                     ) : (
                       <RichTextEditor
                         value={formData.document.extractedText || ""}
@@ -830,7 +841,7 @@ export default function AddLessonContentPage() {
                         height="400px"
                         className="border border-gray-300 rounded-lg"
                       />
-                      )}
+                    )}
                     <p className="text-xs text-gray-500 mt-1">
                       Content extracted from PDF will appear above. You can edit it using the rich text editor.
                     </p>

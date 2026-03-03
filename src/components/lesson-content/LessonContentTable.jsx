@@ -31,7 +31,7 @@ const LessonContentTable = () => {
     try {
       if (!skipLoading) setLoading(true);
       setError(null);
-      
+
       const params = {
         page,
         limit,
@@ -40,7 +40,7 @@ const LessonContentTable = () => {
         ...(search && { search }),
         ...(contentType && { contentType })
       };
-      
+
       const response = await lessonContentAPI.getAllLessonContents(params);
       if (response.success) {
         setContents(response.data || []);
@@ -116,13 +116,13 @@ const LessonContentTable = () => {
       'Delete Lesson Content?',
       'This action cannot be undone. All content data will be permanently deleted.'
     );
-    
+
     if (result.isConfirmed) {
-    try {
-      const response = await lessonContentAPI.deleteLessonContent(content.id);
-      if (response.success) {
+      try {
+        const response = await lessonContentAPI.deleteLessonContent(content.id);
+        if (response.success) {
           showSuccess('Content Deleted!', 'The lesson content has been deleted successfully.');
-        await fetchLessonContents(pagination.page, pagination.limit, searchTerm, filterType);
+          await fetchLessonContents(pagination.page, pagination.limit, searchTerm, filterType);
         } else {
           showError('Delete Failed', response.message || 'Failed to delete lesson content');
         }
@@ -146,9 +146,19 @@ const LessonContentTable = () => {
 
   // Determine content type from video/document presence
   const getContentType = (content) => {
-    const hasVideo = content.video && (content.video.filePath || content.video.fileName);
-    const hasDocument = content.document && (content.document.filePath || content.document.fileName);
-    
+    const hasVideo = content.video && (
+      content.video.filePath ||
+      content.video.fileName ||
+      content.video.youtubeUrl ||
+      content.video.vimeoUrl ||
+      (content.video.type && content.video.type !== 'none')
+    );
+    const hasDocument = content.document && (
+      content.document.filePath ||
+      content.document.fileName ||
+      (content.document.extractedText && content.document.extractedText !== '<p></p>')
+    );
+
     if (hasVideo && hasDocument) return "mixed";
     if (hasVideo) return "video";
     if (hasDocument) return "document";
@@ -166,7 +176,7 @@ const LessonContentTable = () => {
   const formatContent = (content) => {
     const lesson = content.lessonId || {};
     const contentType = getContentType(content);
-    
+
     return {
       id: content._id,
       title: content.title || 'Untitled',
