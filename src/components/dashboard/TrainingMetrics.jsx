@@ -16,7 +16,7 @@ export const TrainingMetrics = () => {
         setLoading(true);
         setError(null);
         const response = await getDashboardStats();
-        
+
         if (response.success) {
           setStats(response.data);
         } else {
@@ -59,9 +59,9 @@ export const TrainingMetrics = () => {
   }
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('nb-NO', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'NOK',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);

@@ -239,7 +239,9 @@ const DataTable = ({
                     {column.label}
                   </th>
                 ))}
-                <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                {(onView || onEdit || onDelete) && (
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -251,47 +253,49 @@ const DataTable = ({
                         {column.render ? column.render(item[column.key], item) : item[column.key]}
                       </td>
                     ))}
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        {onView && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => onView(item)}
-                            className="text-gray-700 hover:text-gray-900"
-                            title="View Details"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {onEdit && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => onEdit(item)}
-                            className="text-gray-700 hover:text-gray-900"
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        )}
-                        {onDelete && (
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={() => onDelete(item)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
+                    {(onView || onEdit || onDelete) && (
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          {onView && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onView(item)}
+                              className="text-gray-700 hover:text-gray-900"
+                              title="View Details"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {onEdit && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onEdit(item)}
+                              className="text-gray-700 hover:text-gray-900"
+                              title="Edit"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {onDelete && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => onDelete(item)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={columns.length + 1} className="py-8 text-center text-gray-500">
+                  <td colSpan={columns.length + (onView || onEdit || onDelete ? 1 : 0)} className="py-8 text-center text-gray-500">
                     No data available
                   </td>
                 </tr>
