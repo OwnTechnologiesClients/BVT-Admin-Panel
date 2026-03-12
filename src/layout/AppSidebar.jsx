@@ -18,6 +18,7 @@ import {
   ClipboardListIcon,
   EnvelopeIcon,
   CreditCardIcon,
+  PageIcon,
 } from "../icons/index";
 
 const adminNavItems = [
@@ -145,6 +146,11 @@ const adminOthersItems = [
     icon: <ClipboardListIcon />,
     name: "Student Queries",
     path: "/notifications",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Certificates",
+    path: "/certificates",
   },
 ];
 

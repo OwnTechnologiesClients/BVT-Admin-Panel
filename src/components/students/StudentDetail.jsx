@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
-import { FileText, Download, ExternalLink } from "lucide-react";
+import { FileText, Download, ExternalLink, Award } from "lucide-react";
 import { ComponentCard } from "@/components/common/ComponentCard";
 import { Badge, Button } from "@/components/ui";
 import { getAllCourses } from "@/lib/api/course";
 import { getStudentEnrollments, createEnrollment, deleteEnrollment } from "@/lib/api/enrollment";
 import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
+import CertificateModal from "@/components/certificates/CertificateModal";
 
 const InfoRow = ({ label, value }) => (
   <div>
@@ -36,6 +37,8 @@ const StudentDetail = ({ student }) => {
   const [enrollmentDate, setEnrollmentDate] = useState("");
   const [error, setError] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certCourse, setCertCourse] = useState(null);
 
   // Helper to get image URL
   const getImageUrl = (imagePath) => {
@@ -557,6 +560,18 @@ const StudentDetail = ({ student }) => {
                     >
                       Remove
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCertCourse({ _id: course.courseId || course.id, title: course.title || course.name });
+                        setCertModalOpen(true);
+                      }}
+                      className="text-amber-600 hover:text-amber-800 hover:border-amber-300"
+                    >
+                      <Award className="w-4 h-4 mr-1" />
+                      Certificate
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -567,6 +582,14 @@ const StudentDetail = ({ student }) => {
       {activeTab === "payments" && (
         <StudentPayments studentId={student._id} />
       )}
+
+      {/* Certificate Modal */}
+      <CertificateModal
+        isOpen={certModalOpen}
+        onClose={() => { setCertModalOpen(false); setCertCourse(null); }}
+        student={student}
+        course={certCourse || {}}
+      />
     </div>
   );
 };
