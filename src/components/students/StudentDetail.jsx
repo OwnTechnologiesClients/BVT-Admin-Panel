@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useMemo, useState, useEffect } from "react";
+import { FileText, Download, ExternalLink, Award } from "lucide-react";
 import { ComponentCard } from "@/components/common/ComponentCard";
 import { Badge, Button } from "@/components/ui";
 import { getAllCourses } from "@/lib/api/course";
 import { getStudentEnrollments, createEnrollment, deleteEnrollment } from "@/lib/api/enrollment";
 import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
+import CertificateModal from "@/components/certificates/CertificateModal";
 
 const InfoRow = ({ label, value }) => (
   <div>
@@ -35,6 +37,8 @@ const StudentDetail = ({ student }) => {
   const [enrollmentDate, setEnrollmentDate] = useState("");
   const [error, setError] = useState(null);
   const [imageError, setImageError] = useState(false);
+  const [certModalOpen, setCertModalOpen] = useState(false);
+  const [certCourse, setCertCourse] = useState(null);
 
   // Helper to get image URL
   const getImageUrl = (imagePath) => {
@@ -63,21 +67,21 @@ const StudentDetail = ({ student }) => {
         setLoadingEnrollments(true);
         setError(null);
         const response = await getStudentEnrollments(student._id);
-        
+
         if (response.success) {
           const enrollmentsList = response.data?.enrollments || [];
           setEnrollments(enrollmentsList);
-          
+
           // Transform enrollments to course format for display
           const coursesList = enrollmentsList.map((enrollment) => {
             const course = enrollment.courseId;
-            
+
             // Helper to check if a value is an ObjectId (24 char hex string)
             const isObjectId = (val) => {
               if (typeof val !== 'string') return false;
               return /^[0-9a-fA-F]{24}$/.test(val);
             };
-            
+
             // Get category name - avoid showing ObjectIds
             let categoryName = 'General';
             if (course.category) {
@@ -87,7 +91,7 @@ const StudentDetail = ({ student }) => {
                 categoryName = course.category.name;
               }
             }
-            
+
             // Get instructor name - avoid showing ObjectIds
             let instructorName = 'TBA';
             if (course.instructor) {
@@ -103,7 +107,7 @@ const StudentDetail = ({ student }) => {
                 }
               }
             }
-            
+
             return {
               _id: enrollment._id,
               enrollmentId: enrollment._id,
@@ -139,7 +143,7 @@ const StudentDetail = ({ student }) => {
       try {
         setLoadingCourses(true);
         const response = await getAllCourses({ limit: 1000 }); // Get all courses
-        
+
         if (response.success) {
           // Handle different response structures
           const coursesList = response.data?.courses || response.data || [];
@@ -178,7 +182,7 @@ const StudentDetail = ({ student }) => {
       if (response.success) {
         const enrollment = response.data?.enrollment;
         const course = enrollment.courseId;
-        
+
         // Add to local state
         const newEnrollment = {
           _id: enrollment._id,
@@ -187,7 +191,7 @@ const StudentDetail = ({ student }) => {
           courseId: course._id || course.id,
           title: course.title || course.name,
           category: typeof course.category === 'object' ? course.category?.name : course.category || 'General',
-          instructor: typeof course.instructor === 'object' 
+          instructor: typeof course.instructor === 'object'
             ? (course.instructor?.userId?.firstName && course.instructor?.userId?.lastName
               ? `${course.instructor.userId.firstName} ${course.instructor.userId.lastName}`
               : course.instructor?.userId?.email || 'TBA')
@@ -217,30 +221,30 @@ const StudentDetail = ({ student }) => {
       'Unenroll Student?',
       'Are you sure you want to unenroll this student from the course?'
     );
-    
+
     if (result.isConfirmed) {
-    try {
-      setError(null);
-      setLoadingCourses(true);
+      try {
+        setError(null);
+        setLoadingCourses(true);
 
-      const response = await deleteEnrollment(enrollmentId);
+        const response = await deleteEnrollment(enrollmentId);
 
-      if (response.success) {
+        if (response.success) {
           showSuccess('Student Unenrolled!', 'The student has been unenrolled from the course successfully.');
-        // Remove from local state
-        setCourses((prev) => prev.filter((c) => c.enrollmentId !== enrollmentId));
-        setEnrollments((prev) => prev.filter((e) => e._id !== enrollmentId));
-      } else {
+          // Remove from local state
+          setCourses((prev) => prev.filter((c) => c.enrollmentId !== enrollmentId));
+          setEnrollments((prev) => prev.filter((e) => e._id !== enrollmentId));
+        } else {
           const errorMsg = response.message || "Failed to unenroll student";
           setError(errorMsg);
           showError('Error', errorMsg);
-      }
-    } catch (err) {
+        }
+      } catch (err) {
         const errorMsg = err.message || "An error occurred while unenrolling student";
         setError(errorMsg);
         showError('Error', errorMsg);
-    } finally {
-      setLoadingCourses(false);
+      } finally {
+        setLoadingCourses(false);
       }
     }
   };
@@ -284,23 +288,30 @@ const StudentDetail = ({ student }) => {
         <div className="mt-6 flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTab("info")}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === "info"
-                ? "bg-blue-100 text-blue-600"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${activeTab === "info"
+              ? "bg-blue-100 text-blue-600"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
           >
             Student Info
           </button>
           <button
             onClick={() => setActiveTab("courses")}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === "courses"
-                ? "bg-blue-100 text-blue-600"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${activeTab === "courses"
+              ? "bg-blue-100 text-blue-600"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
           >
             Courses & Progress
+          </button>
+          <button
+            onClick={() => setActiveTab("payments")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${activeTab === "payments"
+              ? "bg-blue-100 text-blue-600"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+          >
+            Payment History
           </button>
         </div>
       </ComponentCard>
@@ -456,9 +467,9 @@ const StudentDetail = ({ student }) => {
                   />
                 </div>
                 <div className="flex items-end">
-                  <Button 
-                    type="submit" 
-                    variant="primary" 
+                  <Button
+                    type="submit"
+                    variant="primary"
                     className="w-full"
                     disabled={loadingCourses || !selectedCourseId}
                   >
@@ -549,6 +560,18 @@ const StudentDetail = ({ student }) => {
                     >
                       Remove
                     </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setCertCourse({ _id: course.courseId || course.id, title: course.title || course.name });
+                        setCertModalOpen(true);
+                      }}
+                      className="text-amber-600 hover:text-amber-800 hover:border-amber-300"
+                    >
+                      <Award className="w-4 h-4 mr-1" />
+                      Certificate
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -556,7 +579,104 @@ const StudentDetail = ({ student }) => {
           )}
         </ComponentCard>
       )}
+      {activeTab === "payments" && (
+        <StudentPayments studentId={student._id} />
+      )}
+
+      {/* Certificate Modal */}
+      <CertificateModal
+        isOpen={certModalOpen}
+        onClose={() => { setCertModalOpen(false); setCertCourse(null); }}
+        student={student}
+        course={certCourse || {}}
+      />
     </div>
+  );
+};
+
+// Sub-component for student payments to manage its own state
+import { getAllTransactions } from "@/lib/api/stripe";
+
+const StudentPayments = ({ studentId }) => {
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      try {
+        const response = await getAllTransactions({ studentId });
+        if (response.success) {
+          setPayments(response.data);
+        }
+      } catch (err) {
+        console.error("Error fetching student payments:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPayments();
+  }, [studentId]);
+
+  if (loading) return <div className="py-8 text-center text-gray-500">Loading payment history...</div>;
+
+  return (
+    <ComponentCard title="Payment History">
+      {payments.length === 0 ? (
+        <div className="py-8 text-center text-gray-500 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          No payment records found for this student.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-gray-100 italic text-gray-400 text-xs">
+                <th className="pb-3 font-medium">Item</th>
+                <th className="pb-3 font-medium">Amount</th>
+                <th className="pb-3 font-medium">Status</th>
+                <th className="pb-3 font-medium text-right">Date</th>
+                <th className="pb-3 font-medium text-right">Invoice</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {payments.map((payment) => (
+                <tr key={payment._id} className="hover:bg-gray-50 transition-colors">
+                  <td className="py-3 px-2">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-gray-800">{payment.itemId?.title || "Item " + (payment.itemId?._id?.substring(0, 8) || "N/A")}</span>
+                      <span className="text-[10px] uppercase text-gray-500 font-bold">{payment.itemType}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-2 font-bold text-sm text-gray-800">{payment.amount?.toFixed(2)} NOK</td>
+                  <td className="py-4">
+                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${payment.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                      }`}>
+                      {payment.status}
+                    </span>
+                  </td>
+                  <td className="py-4 text-right text-xs text-gray-500">
+                    {new Date(payment.createdAt).toLocaleDateString()}
+                  </td>
+                  <td className="py-4 text-right">
+                    {payment.invoice?.pdfUrl ? (
+                      <button
+                        onClick={() => window.open(payment.invoice.pdfUrl, '_blank')}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-[10px] font-bold uppercase"
+                        title={`View Invoice: ${payment.invoice.invoiceNumber}`}
+                      >
+                        <FileText className="w-3 h-3" />
+                        View
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-gray-400 italic">N/A</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </ComponentCard>
   );
 };
 

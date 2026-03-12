@@ -17,6 +17,8 @@ import {
   HorizontaLDots,
   ClipboardListIcon,
   EnvelopeIcon,
+  CreditCardIcon,
+  PageIcon,
 } from "../icons/index";
 
 const adminNavItems = [
@@ -29,40 +31,54 @@ const adminNavItems = [
     icon: <BookOpenIcon />,
     name: "Course Management",
     subItems: [
-      { name: "Course Categories", path: "/course-categories", subItems: [
-        { name: "View Categories", path: "/course-categories" },
-        { name: "Add Category", path: "/course-categories/add" }
-      ]},
-      { name: "Courses", path: "/courses", subItems: [
-        { name: "View Courses", path: "/courses" },
-        { name: "Add Course", path: "/courses/add" }
-      ]},
-      { name: "Chapters", path: "/chapters", subItems: [
-        { name: "View Chapters", path: "/chapters" },
-        { name: "Add Chapter", path: "/chapters/add" }
-      ]},
-      { name: "Lessons", path: "/lessons", subItems: [
-        { name: "View Lessons", path: "/lessons" },
-        { name: "Add Lesson", path: "/lessons/add" }
-      ]},
-      { name: "Lesson Content", path: "/lesson-content", subItems: [
-        { name: "View Content", path: "/lesson-content" },
-        { name: "Add Content", path: "/lesson-content/add" }
-      ]},
+      {
+        name: "Course Categories", path: "/course-categories", subItems: [
+          { name: "View Categories", path: "/course-categories" },
+          { name: "Add Category", path: "/course-categories/add" }
+        ]
+      },
+      {
+        name: "Courses", path: "/courses", subItems: [
+          { name: "View Courses", path: "/courses" },
+          { name: "Add Course", path: "/courses/add" }
+        ]
+      },
+      {
+        name: "Chapters", path: "/chapters", subItems: [
+          { name: "View Chapters", path: "/chapters" },
+          { name: "Add Chapter", path: "/chapters/add" }
+        ]
+      },
+      {
+        name: "Lessons", path: "/lessons", subItems: [
+          { name: "View Lessons", path: "/lessons" },
+          { name: "Add Lesson", path: "/lessons/add" }
+        ]
+      },
+      {
+        name: "Lesson Content", path: "/lesson-content", subItems: [
+          { name: "View Content", path: "/lesson-content" },
+          { name: "Add Content", path: "/lesson-content/add" }
+        ]
+      },
     ],
   },
   {
     icon: <CalendarDaysIcon />,
     name: "Event Management",
     subItems: [
-      { name: "Events", path: "/event-categories", subItems: [
-        { name: "View Event", path: "/events" },
-        { name: "Add Event", path: "/events/add" }
-      ]},
-      { name: "Event Themes", path: "/event-categories", subItems: [
-        { name: "View Themes", path: "/event-categories" },
-        { name: "Add Theme", path: "/event-categories/add" }
-      ]},
+      {
+        name: "Events", path: "/event-categories", subItems: [
+          { name: "View Event", path: "/events" },
+          { name: "Add Event", path: "/events/add" }
+        ]
+      },
+      {
+        name: "Event Themes", path: "/event-categories", subItems: [
+          { name: "View Themes", path: "/event-categories" },
+          { name: "Add Theme", path: "/event-categories/add" }
+        ]
+      },
     ],
   },
   // {
@@ -105,6 +121,11 @@ const adminNavItems = [
       { name: "Add Student", path: "/students/add" },
     ],
   },
+  {
+    icon: <CreditCardIcon />,
+    name: "Payments",
+    path: "/payments",
+  },
 ];
 
 const adminOthersItems = [
@@ -125,6 +146,11 @@ const adminOthersItems = [
     icon: <ClipboardListIcon />,
     name: "Student Queries",
     path: "/notifications",
+  },
+  {
+    icon: <PageIcon />,
+    name: "Certificates",
+    path: "/certificates",
   },
 ];
 
@@ -231,7 +257,7 @@ const AppSidebar = () => {
       if (path === pathname) {
         return true;
       }
-      
+
       // For paths other than root, check if pathname starts with path + "/"
       // But only if there's no more specific path that matches exactly
       if (path !== "/" && pathname.startsWith(path + "/")) {
@@ -240,11 +266,11 @@ const AppSidebar = () => {
         const hasMoreSpecificMatch = allPaths.some(
           (p) => p !== path && pathname === p && p.startsWith(path + "/")
         );
-        
+
         // Only highlight parent if no more specific child matches
         return !hasMoreSpecificMatch;
       }
-      
+
       return false;
     },
     [pathname, primaryNav, secondaryNav, getAllPaths]
@@ -256,7 +282,7 @@ const AppSidebar = () => {
     let submenuMatched = false;
     let matchedIndex = null;
     let matchedType = null;
-    
+
     ["main", "others"].forEach((menuType) => {
       const items = menuType === "main" ? primaryNav : secondaryNav;
       items.forEach((nav, index) => {
@@ -266,11 +292,11 @@ const AppSidebar = () => {
             for (const subItem of subItems) {
               // Check exact match first (most specific)
               if (pathname === subItem.path) {
-              setOpenSubmenu({
-                type: menuType,
-                index,
-              });
-              submenuMatched = true;
+                setOpenSubmenu({
+                  type: menuType,
+                  index,
+                });
+                submenuMatched = true;
                 matchedIndex = index;
                 matchedType = menuType;
                 return true;
@@ -284,7 +310,7 @@ const AppSidebar = () => {
             }
             return false;
           };
-          
+
           // First check for exact matches
           if (!checkSubItems(nav.subItems)) {
             // If no exact match, check for parent path matches
@@ -343,22 +369,19 @@ const AppSidebar = () => {
           {nav.subItems ? (
             <button
               onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group ${
-                openSubmenu?.type === menuType && openSubmenu?.index === index
-                  ? "menu-item-active"
-                  : "menu-item-inactive"
-              } cursor-pointer ${
-                !isExpanded && !isHovered
+              className={`menu-item group ${openSubmenu?.type === menuType && openSubmenu?.index === index
+                ? "menu-item-active"
+                : "menu-item-inactive"
+                } cursor-pointer ${!isExpanded && !isHovered
                   ? "lg:justify-center"
                   : "lg:justify-start"
-              }`}
+                }`}
             >
               <span
-                className={`${
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? "menu-item-icon-active"
-                    : "menu-item-icon-inactive"
-                }`}
+                className={`${openSubmenu?.type === menuType && openSubmenu?.index === index
+                  ? "menu-item-icon-active"
+                  : "menu-item-icon-inactive"
+                  }`}
               >
                 {nav.icon}
               </span>
@@ -367,12 +390,11 @@ const AppSidebar = () => {
               )}
               {(isExpanded || isHovered || isMobileOpen) && (
                 <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${
-                    openSubmenu?.type === menuType &&
+                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${openSubmenu?.type === menuType &&
                     openSubmenu?.index === index
-                      ? "rotate-180 text-blue-500"
-                      : ""
-                  }`}
+                    ? "rotate-180 text-blue-500"
+                    : ""
+                    }`}
                 />
               )}
             </button>
@@ -380,16 +402,14 @@ const AppSidebar = () => {
             nav.path && (
               <Link
                 href={nav.path}
-                className={`menu-item group ${
-                  isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
-                }`}
+                className={`menu-item group ${isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                  }`}
               >
                 <span
-                  className={`${
-                    isActive(nav.path)
-                      ? "menu-item-icon-active"
-                      : "menu-item-icon-inactive"
-                  }`}
+                  className={`${isActive(nav.path)
+                    ? "menu-item-icon-active"
+                    : "menu-item-icon-inactive"
+                    }`}
                 >
                   {nav.icon}
                 </span>
@@ -426,11 +446,10 @@ const AppSidebar = () => {
                             <li key={nestedSubItem.name}>
                               <Link
                                 href={nestedSubItem.path}
-                                className={`menu-dropdown-item ${
-                                  isActive(nestedSubItem.path)
-                                    ? "menu-dropdown-item-active"
-                                    : "menu-dropdown-item-inactive"
-                                }`}
+                                className={`menu-dropdown-item ${isActive(nestedSubItem.path)
+                                  ? "menu-dropdown-item-active"
+                                  : "menu-dropdown-item-inactive"
+                                  }`}
                               >
                                 {nestedSubItem.name}
                               </Link>
@@ -442,11 +461,10 @@ const AppSidebar = () => {
                       // Regular subItem without nested items
                       <Link
                         href={subItem.path}
-                        className={`menu-dropdown-item ${
-                          isActive(subItem.path)
-                            ? "menu-dropdown-item-active"
-                            : "menu-dropdown-item-inactive"
-                        }`}
+                        className={`menu-dropdown-item ${isActive(subItem.path)
+                          ? "menu-dropdown-item-active"
+                          : "menu-dropdown-item-inactive"
+                          }`}
                       >
                         {subItem.name}
                       </Link>
@@ -463,36 +481,34 @@ const AppSidebar = () => {
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${
-        isExpanded || isMobileOpen
-          ? "w-[290px]"
-          : isHovered
+      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${isExpanded || isMobileOpen
+        ? "w-[290px]"
+        : isHovered
           ? "w-[290px]"
           : "w-[90px]"
-      } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
+        } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        className={`py-8 flex ${
-          !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-        }`}
+        className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
+          }`}
       >
         <Link href={homeHref}>
           {isExpanded || isHovered || isMobileOpen ? (
             <div className="flex items-center space-x-3">
-              <img 
-                src="/BVT_logo.png" 
-                alt="BVT Admin Logo" 
+              <img
+                src="/BVT_logo.png"
+                alt="BVT Admin Logo"
                 className="w-8 h-8 object-contain"
               />
               <div className="text-xl font-bold text-blue-600">{brandLabel}</div>
             </div>
           ) : (
             <div className="flex items-center justify-center">
-              <img 
-                src="/BVT_logo.png" 
-                alt="BVT Logo" 
+              <img
+                src="/BVT_logo.png"
+                alt="BVT Logo"
                 className="w-8 h-8 object-contain"
               />
             </div>
@@ -504,11 +520,10 @@ const AppSidebar = () => {
           <div className="flex flex-col gap-4">
             <div>
               <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered
-                    ? "lg:justify-center"
-                    : "justify-start"
-                }`}
+                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered
+                  ? "lg:justify-center"
+                  : "justify-start"
+                  }`}
               >
                 {isExpanded || isHovered || isMobileOpen ? (
                   "Menu"
@@ -521,11 +536,10 @@ const AppSidebar = () => {
 
             <div className="">
               <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered
-                    ? "lg:justify-center"
-                    : "justify-start"
-                }`}
+                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered
+                  ? "lg:justify-center"
+                  : "justify-start"
+                  }`}
               >
                 {isExpanded || isHovered || isMobileOpen ? (
                   "Others"

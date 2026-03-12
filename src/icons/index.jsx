@@ -1,14 +1,14 @@
-import { 
-  FaTh, 
-  FaCalendarAlt, 
-  FaUserCircle, 
-  FaList, 
-  FaTable, 
-  FaFileAlt, 
-  FaChartPie, 
-  FaCube, 
-  FaPlug, 
-  FaChevronDown, 
+import {
+  FaTh,
+  FaCalendarAlt,
+  FaUserCircle,
+  FaList,
+  FaTable,
+  FaFileAlt,
+  FaChartPie,
+  FaCube,
+  FaPlug,
+  FaChevronDown,
   FaEllipsisH,
   FaBookOpen,
   FaCalendarDay,
@@ -17,7 +17,8 @@ import {
   FaCog,
   FaChartBar,
   FaClipboardList,
-  FaEnvelope
+  FaEnvelope,
+  FaCreditCard
 } from 'react-icons/fa';
 
 export {
@@ -40,4 +41,5 @@ export {
   FaChartBar as BarChartIcon,
   FaClipboardList as ClipboardListIcon,
   FaEnvelope as EnvelopeIcon,
+  FaCreditCard as CreditCardIcon,
 };

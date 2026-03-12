@@ -24,16 +24,20 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
     duration: "",
     level: "Beginner",
     price: "",
+    priceNOK: "",
+    priceUSD: "",
     originalPrice: "",
+    originalPriceNOK: "",
+    originalPriceUSD: "",
     image: "",
     isFeatured: false,
     isOnline: true,
     maxStudents: 100,
-    
+
     // Step 2: Course Details
     prerequisites: "",
     learningObjectives: [],
-    
+
     // Step 3: Course Structure (Chapters)
     chapters: [
       {
@@ -50,6 +54,17 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
   const [instructors, setInstructors] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Exchange rate: 1 USD = 10.5 NOK
+  const NOK_TO_USD_RATE = 10.5;
+
+  // Calculate USD from NOK
+  const calculateUSD = (nokValue) => {
+    if (!nokValue || nokValue === "") return "";
+    const nok = parseFloat(nokValue);
+    if (isNaN(nok)) return "";
+    return (Math.round((nok / NOK_TO_USD_RATE) * 100) / 100).toFixed(2);
+  };
 
   // Fetch categories and instructors
   useEffect(() => {
@@ -74,6 +89,9 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
           const courseResponse = await courseAPI.getCourseById(initialData.id);
           if (courseResponse.success) {
             const course = courseResponse.data;
+            const priceNOK = course.priceNOK?.toString() || (course.price ? (parseFloat(course.price) * NOK_TO_USD_RATE).toFixed(2) : "");
+            const priceUSD = course.priceUSD?.toString() || course.price?.toString() || "";
+
             setFormData({
               title: course.title || "",
               slug: course.slug || "",
@@ -82,8 +100,12 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
               instructor: course.instructor?._id || course.instructor || "",
               duration: course.duration || "",
               level: course.level || "beginner",
-              price: course.price?.toString() || "",
-              originalPrice: course.originalPrice?.toString() || "",
+              price: priceUSD, // Keep for backward compatibility
+              priceNOK: priceNOK,
+              priceUSD: priceUSD,
+              originalPrice: course.originalPriceUSD?.toString() || course.originalPrice?.toString() || "",
+              originalPriceNOK: course.originalPriceNOK?.toString() || (course.originalPrice ? (parseFloat(course.originalPrice) * NOK_TO_USD_RATE).toFixed(2) : ""),
+              originalPriceUSD: course.originalPriceUSD?.toString() || course.originalPrice?.toString() || "",
               image: course.image || "",
               isFeatured: course.isFeatured || false,
               isOnline: course.isOnline !== undefined ? course.isOnline : true,
@@ -114,6 +136,26 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
       ...prev,
       [field]: value
     }));
+
+    // Auto-calculate USD when NOK price changes
+    if (field === 'priceNOK') {
+      const usdValue = calculateUSD(value);
+      setFormData(prev => ({
+        ...prev,
+        priceUSD: usdValue,
+        price: usdValue // Keep for backward compatibility
+      }));
+    }
+
+    // Auto-calculate Original USD when Original NOK changes
+    if (field === 'originalPriceNOK') {
+      const usdValue = calculateUSD(value);
+      setFormData(prev => ({
+        ...prev,
+        originalPriceUSD: usdValue,
+        originalPrice: usdValue // Keep for backward compatibility
+      }));
+    }
   };
 
   const handleImageChange = (e) => {
@@ -124,7 +166,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
         showError('Invalid File Type', 'Please select an image file.');
         return;
       }
-      
+
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         showError('File Too Large', 'Image size should be less than 5MB.');
@@ -132,7 +174,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
       }
 
       setImageFile(file);
-      
+
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -221,10 +263,10 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       setSubmitting(true);
-      
+
       // Handle image upload - convert to base64 if file is selected
       let imageUrl = formData.image;
       if (imageFile) {
@@ -237,7 +279,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
         reader.readAsDataURL(imageFile);
         imageUrl = await base64Promise;
       }
-      
+
       const courseData = {
         title: formData.title.trim(),
         slug: formData.slug.trim() || formData.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
@@ -246,14 +288,18 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
         instructor: formData.instructor,
         duration: formData.duration.trim(),
         level: formData.level.toLowerCase(),
-        price: parseFloat(formData.price) || 0,
-        originalPrice: formData.originalPrice ? parseFloat(formData.originalPrice) : undefined,
+        priceNOK: parseFloat(formData.priceNOK) || 0,
+        priceUSD: parseFloat(formData.priceUSD) || calculateUSD(formData.priceNOK) || 0,
+        price: parseFloat(formData.priceUSD) || calculateUSD(formData.priceNOK) || 0,
+        originalPriceNOK: formData.originalPriceNOK ? parseFloat(formData.originalPriceNOK) : undefined,
+        originalPriceUSD: formData.originalPriceUSD ? parseFloat(formData.originalPriceUSD) : undefined,
+        originalPrice: formData.originalPriceUSD ? parseFloat(formData.originalPriceUSD) : undefined,
         image: imageUrl || undefined,
         isFeatured: formData.isFeatured,
         isOnline: formData.isOnline,
         maxStudents: formData.maxStudents || 100,
         prerequisites: formData.prerequisites?.trim() || undefined,
-        learningObjectives: Array.isArray(formData.learningObjectives) 
+        learningObjectives: Array.isArray(formData.learningObjectives)
           ? formData.learningObjectives.filter(obj => obj.trim())
           : undefined
       };
@@ -264,7 +310,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
       } else {
         response = await courseAPI.createCourse(courseData);
       }
-      
+
       if (response.success) {
         showSuccess(
           isEdit ? 'Course Updated!' : 'Course Created!',
@@ -286,7 +332,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
   const renderStep1 = () => (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -358,7 +404,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
             placeholder="Select instructor"
             displayKey={(instructor) => {
               const user = instructor.userId || {};
-              return user.firstName && user.lastName 
+              return user.firstName && user.lastName
                 ? `${user.firstName} ${user.lastName}`
                 : user.username || 'N/A';
             }}
@@ -399,39 +445,73 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
           </select>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Price (NOK) <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">kr</span>
+              <input
+                type="number"
+                value={formData.priceNOK}
+                onChange={(e) => handleInputChange("priceNOK", e.target.value)}
+                className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                required
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Price (USD) <span className="text-gray-400 text-xs"></span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="text"
+                value={formData.priceUSD || ""}
+                readOnly
+                className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+                placeholder="Auto-calculated"
+              />
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Price <span className="text-red-500">*</span>
+            Original Price (NOK) <span className="text-gray-400 text-xs">(optional)</span>
           </label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+            <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">kr</span>
             <input
               type="number"
-              value={formData.price}
-              onChange={(e) => handleInputChange("price", e.target.value)}
+              value={formData.originalPriceNOK}
+              onChange={(e) => handleInputChange("originalPriceNOK", e.target.value)}
               className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="0.00"
               min="0"
               step="0.01"
-              required
             />
           </div>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Original Price <span className="text-gray-400 text-xs">(optional)</span>
+            Original Price (USD) <span className="text-gray-400 text-xs"></span>
           </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
             <input
-              type="number"
-              value={formData.originalPrice}
-              onChange={(e) => handleInputChange("originalPrice", e.target.value)}
-              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="0.00"
-              min="0"
-              step="0.01"
+              type="text"
+              value={formData.originalPriceUSD || ""}
+              readOnly
+              className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed"
+              placeholder="Auto-calculated"
             />
           </div>
         </div>
@@ -513,7 +593,7 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
   const renderStep2 = () => (
     <div className="space-y-6">
       <h3 className="text-lg font-semibold text-gray-900">Course Details</h3>
-      
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Prerequisites <span className="text-gray-400 text-xs">(optional)</span>
@@ -658,19 +738,17 @@ const MultiStepCourseForm = ({ initialData = null, isEdit = false }) => {
           {[...Array(totalSteps)].map((_, index) => (
             <div key={index} className="flex items-center">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  index + 1 <= currentStep
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-200 text-gray-600"
-                }`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${index + 1 <= currentStep
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-200 text-gray-600"
+                  }`}
               >
                 {index + 1}
               </div>
               {index < totalSteps - 1 && (
                 <div
-                  className={`w-16 h-1 mx-2 ${
-                    index + 1 < currentStep ? "bg-blue-600" : "bg-gray-200"
-                  }`}
+                  className={`w-16 h-1 mx-2 ${index + 1 < currentStep ? "bg-blue-600" : "bg-gray-200"
+                    }`}
                 />
               )}
             </div>
