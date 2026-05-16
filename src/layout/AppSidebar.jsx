@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSidebar } from "../context/SidebarContext";
@@ -25,7 +26,7 @@ const adminNavItems = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Overview", path: "/" }],
+    path: "/",
   },
   {
     icon: <BookOpenIcon />,
@@ -158,7 +159,7 @@ const instructorNavItems = [
   {
     icon: <GridIcon />,
     name: "Dashboard",
-    subItems: [{ name: "Overview", path: "/instructor" }],
+    path: "/instructor",
   },
   {
     icon: <BookOpenIcon />,
@@ -212,10 +213,81 @@ const instructorOthersItems = [
   },
 ];
 
+/** Collapsed rail: submenu opens in a fixed panel (avoids sidebar overflow clipping). */
+function RailNestedFlyout({ nav, groupActive, children }) {
+  const btnRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const leaveTimer = useRef(null);
+
+  const show = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+    const r = btnRef.current?.getBoundingClientRect();
+    if (r) {
+      const left = r.right + 8;
+      const maxLeft = window.innerWidth - 248;
+      setPos({
+        top: Math.max(8, r.top),
+        left: Math.min(left, maxLeft),
+      });
+    }
+    setOpen(true);
+  };
+
+  const hide = () => {
+    leaveTimer.current = setTimeout(() => setOpen(false), 140);
+  };
+
+  const cancelHide = () => {
+    if (leaveTimer.current) clearTimeout(leaveTimer.current);
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        title={nav.name}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        className={`menu-item w-full cursor-default lg:justify-center ${
+          groupActive ? "menu-item-active" : "menu-item-inactive"
+        }`}
+      >
+        <span
+          className={`menu-item-icon-slot ${
+            groupActive ? "menu-item-icon-active" : "menu-item-icon-inactive"
+          }`}
+        >
+          {nav.icon}
+        </span>
+      </button>
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            role="menu"
+            onMouseEnter={cancelHide}
+            onMouseLeave={hide}
+            style={{ top: pos.top, left: pos.left }}
+            className="fixed z-[500] max-h-[min(70vh,calc(100vh-16px))] min-w-[240px] overflow-y-auto rounded-lg border border-gray-200 bg-white py-2 shadow-xl"
+          >
+            <p className="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              {nav.name}
+            </p>
+            {children}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
 const AppSidebar = () => {
-  const { isExpanded, isMobileOpen, isHovered, setIsHovered } = useSidebar();
+  const { isExpanded, isMobileOpen } = useSidebar();
   const { role } = useAuth();
   const pathname = usePathname();
+  const isRail = !isExpanded && !isMobileOpen;
   const primaryNav =
     role === "instructor" ? instructorNavItems : adminNavItems;
   const secondaryNav =
@@ -362,117 +434,203 @@ const AppSidebar = () => {
     });
   };
 
-  const renderMenuItems = (navItems, menuType) => (
-    <ul className="flex flex-col gap-4">
-      {navItems.map((nav, index) => (
-        <li key={nav.name}>
-          {nav.subItems ? (
-            <button
-              onClick={() => handleSubmenuToggle(index, menuType)}
-              className={`menu-item group ${openSubmenu?.type === menuType && openSubmenu?.index === index
-                ? "menu-item-active"
-                : "menu-item-inactive"
-                } cursor-pointer ${!isExpanded && !isHovered
-                  ? "lg:justify-center"
-                  : "lg:justify-start"
-                }`}
-            >
-              <span
-                className={`${openSubmenu?.type === menuType && openSubmenu?.index === index
-                  ? "menu-item-icon-active"
-                  : "menu-item-icon-inactive"
-                  }`}
-              >
-                {nav.icon}
-              </span>
-              {(isExpanded || isHovered || isMobileOpen) && (
-                <span className="menu-item-text">{nav.name}</span>
-              )}
-              {(isExpanded || isHovered || isMobileOpen) && (
-                <ChevronDownIcon
-                  className={`ml-auto w-5 h-5 transition-transform duration-200 ${openSubmenu?.type === menuType &&
-                    openSubmenu?.index === index
-                    ? "rotate-180 text-blue-500"
-                    : ""
-                    }`}
-                />
-              )}
-            </button>
-          ) : (
-            nav.path && (
-              <Link
-                href={nav.path}
-                className={`menu-item group ${isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
-                  }`}
-              >
-                <span
-                  className={`${isActive(nav.path)
-                    ? "menu-item-icon-active"
-                    : "menu-item-icon-inactive"
-                    }`}
-                >
-                  {nav.icon}
-                </span>
-                {(isExpanded || isHovered || isMobileOpen) && (
-                  <span className="menu-item-text">{nav.name}</span>
-                )}
-              </Link>
-            )
-          )}
-          {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
-            <div
-              ref={(el) => {
-                subMenuRefs.current[`${menuType}-${index}`] = el;
-              }}
-              className="overflow-hidden transition-all duration-300"
-              style={{
-                height:
-                  openSubmenu?.type === menuType && openSubmenu?.index === index
-                    ? `${subMenuHeight[`${menuType}-${index}`]}px`
-                    : "0px",
-              }}
-            >
-              <ul className="mt-2 space-y-1 ml-9">
-                {nav.subItems.map((subItem, subIndex) => (
-                  <li key={subItem.name}>
-                    {subItem.subItems ? (
-                      // If this subItem has its own subItems, render them with nested structure
-                      <div>
-                        <div className="menu-dropdown-item flex items-center justify-between">
-                          <span className="font-semibold">{subItem.name}</span>
-                        </div>
-                        <ul className="ml-4 mt-1 space-y-1">
-                          {subItem.subItems.map((nestedSubItem) => (
-                            <li key={nestedSubItem.name}>
-                              <Link
-                                href={nestedSubItem.path}
-                                className={`menu-dropdown-item ${isActive(nestedSubItem.path)
-                                  ? "menu-dropdown-item-active"
-                                  : "menu-dropdown-item-inactive"
-                                  }`}
-                              >
-                                {nestedSubItem.name}
-                              </Link>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : (
-                      // Regular subItem without nested items
-                      <Link
-                        href={subItem.path}
-                        className={`menu-dropdown-item ${isActive(subItem.path)
-                          ? "menu-dropdown-item-active"
-                          : "menu-dropdown-item-inactive"
-                          }`}
-                      >
-                        {subItem.name}
-                      </Link>
-                    )}
+  const isNavGroupActive = useCallback(
+    (nav) => {
+      if (!nav.subItems) return false;
+      const walk = (items) => {
+        for (const item of items) {
+          if (item.path && isActive(item.path)) return true;
+          if (item.subItems && walk(item.subItems)) return true;
+        }
+        return false;
+      };
+      return walk(nav.subItems);
+    },
+    [isActive]
+  );
+
+  const renderFlyoutLinks = (nav) => (
+    <ul className="space-y-0.5">
+      {nav.subItems.map((subItem) => (
+        <li key={subItem.name}>
+          {subItem.subItems ? (
+            <div>
+              <div className="px-3 py-1.5 text-xs font-semibold text-gray-600">
+                {subItem.name}
+              </div>
+              <ul className="ml-2 space-y-0.5 border-l border-gray-100">
+                {subItem.subItems.map((nestedSubItem) => (
+                  <li key={nestedSubItem.name}>
+                    <Link
+                      href={nestedSubItem.path}
+                      className={`block px-3 py-1.5 text-sm rounded-r-md ${
+                        isActive(nestedSubItem.path)
+                          ? "bg-blue-50 text-blue-700 font-medium"
+                          : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {nestedSubItem.name}
+                    </Link>
                   </li>
                 ))}
               </ul>
             </div>
+          ) : (
+            <Link
+              href={subItem.path}
+              className={`mx-1 block rounded-md px-3 py-2 text-sm ${
+                isActive(subItem.path)
+                  ? "bg-blue-50 font-medium text-blue-700"
+                  : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {subItem.name}
+            </Link>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+
+  const renderMenuItems = (navItems, menuType) => (
+    <ul className="flex flex-col gap-4">
+      {navItems.map((nav, index) => (
+        <li key={nav.name} className="relative">
+          {nav.subItems ? (
+            isRail ? (
+              <RailNestedFlyout nav={nav} groupActive={isNavGroupActive(nav)}>
+                {renderFlyoutLinks(nav)}
+              </RailNestedFlyout>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleSubmenuToggle(index, menuType)}
+                  className={`menu-item group w-full cursor-pointer ${
+                    openSubmenu?.type === menuType && openSubmenu?.index === index
+                      ? "menu-item-active"
+                      : "menu-item-inactive"
+                  } ${!isExpanded && !isMobileOpen ? "lg:justify-center" : "lg:justify-start"}`}
+                >
+                  <span
+                    className={`menu-item-icon-slot ${
+                      openSubmenu?.type === menuType && openSubmenu?.index === index
+                        ? "menu-item-icon-active"
+                        : "menu-item-icon-inactive"
+                    }`}
+                  >
+                    {nav.icon}
+                  </span>
+                  {(isExpanded || isMobileOpen) && (
+                    <span className="menu-item-text">{nav.name}</span>
+                  )}
+                  {(isExpanded || isMobileOpen) && (
+                    <span className="menu-item-chevron">
+                      <ChevronDownIcon
+                        className={`h-5 w-5 transition-transform duration-200 ${
+                          openSubmenu?.type === menuType && openSubmenu?.index === index
+                            ? "rotate-180 text-blue-500"
+                            : ""
+                        }`}
+                      />
+                    </span>
+                  )}
+                </button>
+                {nav.subItems && (isExpanded || isMobileOpen) && (
+                  <div
+                    ref={(el) => {
+                      subMenuRefs.current[`${menuType}-${index}`] = el;
+                    }}
+                    className="overflow-hidden transition-all duration-300"
+                    style={{
+                      height:
+                        openSubmenu?.type === menuType && openSubmenu?.index === index
+                          ? `${subMenuHeight[`${menuType}-${index}`]}px`
+                          : "0px",
+                    }}
+                  >
+                    <ul className="mt-2 ml-12 space-y-1 border-l border-gray-100 pl-3">
+                      {nav.subItems.map((subItem) => (
+                        <li key={subItem.name}>
+                          {subItem.subItems ? (
+                            <div>
+                              <div className="menu-dropdown-item flex items-center justify-between">
+                                <span className="font-semibold">{subItem.name}</span>
+                              </div>
+                              <ul className="ml-4 mt-1 space-y-1">
+                                {subItem.subItems.map((nestedSubItem) => (
+                                  <li key={nestedSubItem.name}>
+                                    <Link
+                                      href={nestedSubItem.path}
+                                      className={`menu-dropdown-item ${
+                                        isActive(nestedSubItem.path)
+                                          ? "menu-dropdown-item-active"
+                                          : "menu-dropdown-item-inactive"
+                                      }`}
+                                    >
+                                      {nestedSubItem.name}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : (
+                            <Link
+                              href={subItem.path}
+                              className={`menu-dropdown-item ${
+                                isActive(subItem.path)
+                                  ? "menu-dropdown-item-active"
+                                  : "menu-dropdown-item-inactive"
+                              }`}
+                            >
+                              {subItem.name}
+                            </Link>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </>
+            )
+          ) : (
+            nav.path &&
+            (isRail ? (
+              <div className="relative w-full">
+                <Link
+                  href={nav.path}
+                  title={nav.name}
+                  className={`menu-item group lg:justify-center ${
+                    isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                  }`}
+                >
+                  <span
+                    className={`menu-item-icon-slot ${
+                      isActive(nav.path) ? "menu-item-icon-active" : "menu-item-icon-inactive"
+                    }`}
+                  >
+                    {nav.icon}
+                  </span>
+                </Link>
+              </div>
+            ) : (
+              <Link
+                href={nav.path}
+                className={`menu-item group ${
+                  isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                }`}
+              >
+                <span
+                  className={`menu-item-icon-slot ${
+                    isActive(nav.path) ? "menu-item-icon-active" : "menu-item-icon-inactive"
+                  }`}
+                >
+                  {nav.icon}
+                </span>
+                {(isExpanded || isMobileOpen) && (
+                  <span className="menu-item-text">{nav.name}</span>
+                )}
+              </Link>
+            ))
           )}
         </li>
       ))}
@@ -481,71 +639,51 @@ const AppSidebar = () => {
 
   return (
     <aside
-      className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 ${isExpanded || isMobileOpen
-        ? "w-[290px]"
-        : isHovered
-          ? "w-[290px]"
-          : "w-[90px]"
-        } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
-      onMouseEnter={() => !isExpanded && setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      className={`fixed left-0 top-0 z-50 mt-16 flex h-screen flex-col border-r border-gray-200 bg-white px-5 text-gray-900 transition-all duration-300 ease-in-out lg:mt-0 ${
+        isExpanded || isMobileOpen ? "w-[290px]" : "w-[90px]"
+      } ${isMobileOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
     >
       <div
-        className={`py-8 flex ${!isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
-          }`}
+        className={`flex py-8 ${!isExpanded && !isMobileOpen ? "lg:justify-center" : "justify-start"}`}
       >
         <Link href={homeHref}>
-          {isExpanded || isHovered || isMobileOpen ? (
+          {isExpanded || isMobileOpen ? (
             <div className="flex items-center space-x-3">
               <img
                 src="/BVT_logo.png"
                 alt="BVT Admin Logo"
-                className="w-8 h-8 object-contain"
+                className="h-8 w-8 object-contain"
               />
               <div className="text-xl font-bold text-blue-600">{brandLabel}</div>
             </div>
           ) : (
             <div className="flex items-center justify-center">
-              <img
-                src="/BVT_logo.png"
-                alt="BVT Logo"
-                className="w-8 h-8 object-contain"
-              />
+              <img src="/BVT_logo.png" alt="BVT Logo" className="h-8 w-8 object-contain" />
             </div>
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="no-scrollbar flex flex-col overflow-y-auto duration-300 ease-linear">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
               <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered
-                  ? "lg:justify-center"
-                  : "justify-start"
-                  }`}
+                className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${
+                  !isExpanded && !isMobileOpen ? "lg:justify-center" : "justify-start"
+                }`}
               >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Menu"
-                ) : (
-                  <HorizontaLDots />
-                )}
+                {isExpanded || isMobileOpen ? "Menu" : <HorizontaLDots />}
               </h2>
               {renderMenuItems(primaryNav, "main")}
             </div>
 
-            <div className="">
+            <div>
               <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${!isExpanded && !isHovered
-                  ? "lg:justify-center"
-                  : "justify-start"
-                  }`}
+                className={`mb-4 flex text-xs uppercase leading-[20px] text-gray-400 ${
+                  !isExpanded && !isMobileOpen ? "lg:justify-center" : "justify-start"
+                }`}
               >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Others"
-                ) : (
-                  <HorizontaLDots />
-                )}
+                {isExpanded || isMobileOpen ? "Others" : <HorizontaLDots />}
               </h2>
               {renderMenuItems(secondaryNav, "others")}
             </div>

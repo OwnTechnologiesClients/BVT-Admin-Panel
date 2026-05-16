@@ -99,3 +99,14 @@ export const deleteEnrollment = async (id) => {
   });
 };
 
+/**
+ * Enrollment counts per course. Pass comma-separated courseIds to limit scope.
+ */
+export const getEnrollmentCountsByCourse = async (courseIds = '') => {
+  const queryParams = new URLSearchParams();
+  if (courseIds) queryParams.append('courseIds', courseIds);
+  const queryString = queryParams.toString();
+  const endpoint = `/enrollments/counts-by-course${queryString ? `?${queryString}` : ''}`;
+  return await apiRequest(endpoint, { method: 'GET' });
+};
+

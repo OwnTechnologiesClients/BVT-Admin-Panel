@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { getAllTransactions } from "@/lib/api/stripe";
+import { getAllTransactions, getTransactionStats } from "@/lib/api/stripe";
 import {
   CreditCard,
   Search,
@@ -23,6 +23,12 @@ import ComponentCard from "@/components/common/ComponentCard";
 const PaymentsPage = () => {
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 50,
+    total: 0,
+    totalPages: 0
+  });
   const [statistics, setStatistics] = useState({
     totalAmount: 0,
     successfulCount: 0,
@@ -106,37 +112,57 @@ const PaymentsPage = () => {
     }
   ];
 
-  useEffect(() => {
-    // Fetch transactions from backend
-    const fetchTransactions = async () => {
-      try {
-        const response = await getAllTransactions();
-
-        if (response.success) {
-          setTransactions(response.data);
-
-          // Calculate stats
-          const stats = response.data.reduce((acc, curr) => {
-            if (curr.status === 'completed') {
-              acc.totalAmount += curr.amount;
-              acc.successfulCount += 1;
-            } else if (curr.status === 'pending') {
-              acc.pendingCount += 1;
-            }
-            return acc;
-          }, { totalAmount: 0, successfulCount: 0, pendingCount: 0 });
-
-          setStatistics(stats);
-        }
-      } catch (error) {
-        console.error("Error fetching transactions:", error);
-      } finally {
-        setLoading(false);
+  const fetchStats = async () => {
+    try {
+      const response = await getTransactionStats();
+      if (response.success && response.data) {
+        setStatistics({
+          totalAmount: response.data.totalAmount ?? 0,
+          successfulCount: response.data.successfulCount ?? 0,
+          pendingCount: response.data.pendingCount ?? 0
+        });
       }
-    };
+    } catch (error) {
+      console.error("Error fetching transaction stats:", error);
+    }
+  };
 
-    fetchTransactions();
+  const fetchTransactions = async (page, limit) => {
+    try {
+      setLoading(true);
+      const response = await getAllTransactions({ page, limit });
+
+      if (response.success) {
+        setTransactions(response.data || []);
+        if (response.pagination) {
+          setPagination({
+            page: response.pagination.page || page,
+            limit: response.pagination.limit || limit,
+            total: response.pagination.total || 0,
+            totalPages: response.pagination.totalPages || 0
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+    fetchTransactions(1, 50);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handlePageChange = (newPage) => {
+    fetchTransactions(newPage, pagination.limit);
+  };
+
+  const handlePageSizeChange = (newPageSize) => {
+    fetchTransactions(1, newPageSize);
+  };
 
   return (
     <div className="space-y-6">
@@ -178,7 +204,10 @@ const PaymentsPage = () => {
         <DataTable
           columns={columns}
           data={transactions}
-          loading={loading}
+          pagination={pagination}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          serverSide={true}
         />
       </ComponentCard>
     </div>

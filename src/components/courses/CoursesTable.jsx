@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui";
 import DataTable from "@/components/common/DataTable";
 import * as courseAPI from "@/lib/api/course";
-import * as enrollmentAPI from "@/lib/api/enrollment";
+import { getEnrollmentCountsByCourse } from "@/lib/api/enrollment";
 import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetalert";
 
 const CoursesTable = () => {
@@ -78,62 +78,31 @@ const CoursesTable = () => {
     }
   }, []);
 
-  // Fetch enrollment counts for specific courses
+  // Enrollment counts for visible courses only (aggregation)
   const fetchEnrollmentCounts = useCallback(async (courseIds) => {
+    if (!courseIds?.length) return;
     try {
-      // Fetch all enrollments and count by courseId
-      const response = await enrollmentAPI.getAllEnrollments({ limit: 10000 });
+      const response = await getEnrollmentCountsByCourse(courseIds.join(','));
       if (response.success) {
-        const enrollments = response.data?.enrollments || response.data || [];
         const counts = {};
-        
-        enrollments.forEach(enrollment => {
-          let courseId = null;
-          if (enrollment.courseId) {
-            // Handle both populated and unpopulated courseId
-            if (enrollment.courseId._id) {
-              courseId = enrollment.courseId._id.toString();
-            } else if (enrollment.courseId.toString && typeof enrollment.courseId.toString === 'function') {
-              courseId = enrollment.courseId.toString();
-            } else if (typeof enrollment.courseId === 'string') {
-              courseId = enrollment.courseId;
-            }
-          }
-          
-          if (courseId && courseIds.includes(courseId)) {
-            counts[courseId] = (counts[courseId] || 0) + 1;
-          }
-        });
-        
-        setEnrollmentCounts(prev => ({ ...prev, ...counts }));
+        for (const row of response.data || []) {
+          if (row.courseId) counts[row.courseId] = row.count;
+        }
+        setEnrollmentCounts((prev) => ({ ...prev, ...counts }));
       }
     } catch (err) {
       console.error('Error fetching enrollment counts:', err);
     }
   }, []);
 
-  // Fetch stats and calculate average price from all courses
   const fetchStats = async () => {
     try {
-      const [statsResponse, allCoursesResponse] = await Promise.all([
-        courseAPI.getCourseStats(),
-        courseAPI.getAllCourses({ limit: 10000 }) // Fetch all courses to calculate avg price
-      ]);
-      
+      const statsResponse = await courseAPI.getCourseStats();
       if (statsResponse.success && statsResponse.data) {
-        // Calculate average price from all courses
-        let avgPrice = 0;
-        if (allCoursesResponse.success && allCoursesResponse.data && allCoursesResponse.data.length > 0) {
-          const totalPrice = allCoursesResponse.data.reduce((sum, course) => {
-            return sum + (course.price || 0);
-          }, 0);
-          avgPrice = totalPrice / allCoursesResponse.data.length;
-        }
-        
         setStats({
           totalCourses: statsResponse.data.totalCourses || 0,
           activeCourses: statsResponse.data.activeCourses || 0,
-          avgPrice: avgPrice
+          avgPrice: statsResponse.data.avgPrice ?? 0
         });
       }
     } catch (err) {

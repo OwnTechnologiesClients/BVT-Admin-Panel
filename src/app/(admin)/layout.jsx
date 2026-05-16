@@ -9,12 +9,12 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import { Code2, ExternalLink } from "lucide-react";
 
 export default function AdminLayout({ children }) {
-  const { isExpanded, isHovered, isMobileOpen } = useSidebar();
+  const { isExpanded, isMobileOpen } = useSidebar();
 
   // Dynamic class for main content margin based on sidebar state
   const mainContentMargin = isMobileOpen
     ? "ml-0"
-    : isExpanded || isHovered
+    : isExpanded
     ? "lg:ml-[290px]"
     : "lg:ml-[90px]";
 

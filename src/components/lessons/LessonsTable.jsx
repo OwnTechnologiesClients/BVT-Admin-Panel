@@ -12,9 +12,9 @@ import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetaler
 const LessonsTable = () => {
   const router = useRouter();
   const [lessons, setLessons] = useState([]);
-  const [allLessons, setAllLessons] = useState([]); // For accurate stats
+  const [lessonStats, setLessonStats] = useState({ freeLessons: 0 });
   const [chapters, setChapters] = useState([]);
-  const [lessonContents, setLessonContents] = useState([]);
+  const [contentCountsByLesson, setContentCountsByLesson] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -78,28 +78,31 @@ const LessonsTable = () => {
     }
   };
 
-  // Fetch all lessons for accurate stats - only fetch once
-  const fetchAllLessons = async () => {
+  const fetchLessonStats = async () => {
     try {
-      const response = await lessonAPI.getAllLessons({ limit: 10000 });
-      if (response.success) {
-        setAllLessons(response.data || []);
+      const response = await lessonAPI.getLessonStats();
+      if (response.success && response.data) {
+        setLessonStats({ freeLessons: response.data.freeLessons ?? 0 });
       }
     } catch (err) {
-      console.error('Error fetching all lessons:', err);
+      console.error('Error fetching lesson stats:', err);
     }
   };
 
-  // Fetch lesson contents to count per lesson - only fetch once
-  const fetchLessonContents = async () => {
+  // Per-lesson content counts (aggregation — accurate for all lessons)
+  const fetchLessonContentCounts = async () => {
     try {
-      const response = await lessonContentAPI.getAllLessonContents({ limit: 1000 });
+      const response = await lessonContentAPI.getLessonContentCountsByLesson();
       if (response.success) {
-        const contents = response.data?.lessonContents || response.data || [];
-        setLessonContents(contents);
+        const list = response.data || [];
+        const map = {};
+        for (const row of list) {
+          if (row.lessonId) map[String(row.lessonId)] = row.count;
+        }
+        setContentCountsByLesson(map);
       }
     } catch (err) {
-      console.error('Error fetching lesson contents:', err);
+      console.error('Error fetching lesson content counts:', err);
     }
   };
 
@@ -108,9 +111,9 @@ const LessonsTable = () => {
     if (hasInitialFetch.current) return;
     hasInitialFetch.current = true;
     fetchLessons(1, 10, "", "");
-    fetchAllLessons();
+    fetchLessonStats();
     fetchChapters();
-    fetchLessonContents();
+    fetchLessonContentCounts();
     const timer = setTimeout(() => {
       isInitialMount.current = false;
     }, 100);
@@ -151,11 +154,12 @@ const LessonsTable = () => {
     );
     
     if (result.isConfirmed) {
-    try {
-      const response = await lessonAPI.deleteLesson(lesson.id);
-      if (response.success) {
+      try {
+        const response = await lessonAPI.deleteLesson(lesson.id);
+        if (response.success) {
           showSuccess('Lesson Deleted!', 'The lesson has been deleted successfully.');
-        await fetchLessons(pagination.page, pagination.limit, searchTerm, filterChapter);
+          await fetchLessons(pagination.page, pagination.limit, searchTerm, filterChapter);
+          await fetchLessonContentCounts();
         } else {
           showError('Delete Failed', response.message || 'Failed to delete lesson');
         }
@@ -181,10 +185,8 @@ const LessonsTable = () => {
   const formatLesson = (lesson) => {
     const chapter = lesson.chapterId || {};
     const course = lesson.courseId || {};
-    // Count content items for this lesson
-    const contentCount = lessonContents.filter(
-      content => content.lessonId?._id === lesson._id || content.lessonId === lesson._id
-    ).length;
+    const lessonIdStr = lesson._id ? String(lesson._id) : '';
+    const contentCount = contentCountsByLesson[lessonIdStr] ?? 0;
     
     return {
       id: lesson._id,
@@ -256,7 +258,7 @@ const LessonsTable = () => {
     },
     {
       label: "Free Lessons",
-      value: allLessons.filter(l => l.isFree).length,
+      value: lessonStats.freeLessons,
       icon: "🆓",
       bgColor: "bg-green-100",
       iconColor: "text-green-600",

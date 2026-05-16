@@ -581,7 +581,7 @@ const StudentPayments = ({ studentId }) => {
   useEffect(() => {
     const fetchPayments = async () => {
       try {
-        const response = await getAllTransactions({ studentId });
+        const response = await getAllTransactions({ studentId, limit: 100 });
         if (response.success) {
           setPayments(response.data);
         }

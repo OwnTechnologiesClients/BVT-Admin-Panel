@@ -16,6 +16,8 @@ const DataTable = ({
   onView,
   filters = [],
   stats = [],
+  /** Show first column as serial number (respects pagination). Default true. */
+  showSerialNo = true,
   // Pagination props
   pagination = null, // { total, page, limit, totalPages }
   onPageChange = null, // (page) => void
@@ -89,10 +91,15 @@ const DataTable = ({
 
   // Client-side pagination (only if not server-side)
   const totalItems = serverSide ? (pagination?.total || 0) : filteredData.length;
-  const totalPages = serverSide ? (pagination?.totalPages || 1) : Math.ceil(filteredData.length / pageSize);
-  const startIndex = serverSide ? ((currentPage - 1) * pageSize) : 0;
-  const endIndex = serverSide ? (startIndex + data.length) : (startIndex + pageSize);
-  const displayData = serverSide ? data : filteredData.slice(startIndex, endIndex);
+  const totalPages = serverSide ? (pagination?.totalPages || 1) : Math.ceil(filteredData.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const displayData = serverSide ? data : filteredData.slice(startIndex, startIndex + pageSize);
+  const endIndex = startIndex + displayData.length;
+
+  const actionColCount = (onView || onEdit || onDelete) ? 1 : 0;
+  const colSpanEmpty = columns.length + (showSerialNo ? 1 : 0) + actionColCount;
+
+  const serialBase = startIndex;
 
   const handleFilterChange = (filterKey, value) => {
     const newFilters = {
@@ -234,6 +241,9 @@ const DataTable = ({
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
+                {showSerialNo && (
+                  <th className="w-14 text-left py-3 px-4 font-medium text-gray-700">S.No.</th>
+                )}
                 {columns.map((column, index) => (
                   <th key={index} className="text-left py-3 px-4 font-medium text-gray-700">
                     {column.label}
@@ -248,6 +258,9 @@ const DataTable = ({
               {displayData.length > 0 ? (
                 displayData.map((item, index) => (
                   <tr key={item.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                    {showSerialNo && (
+                      <td className="py-4 px-4 text-sm text-gray-600 tabular-nums">{serialBase + index + 1}</td>
+                    )}
                     {columns.map((column, colIndex) => (
                       <td key={colIndex} className="py-4 px-4">
                         {column.render ? column.render(item[column.key], item) : item[column.key]}
@@ -295,7 +308,7 @@ const DataTable = ({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={columns.length + (onView || onEdit || onDelete ? 1 : 0)} className="py-8 text-center text-gray-500">
+                  <td colSpan={colSpanEmpty} className="py-8 text-center text-gray-500">
                     No data available
                   </td>
                 </tr>
@@ -311,7 +324,7 @@ const DataTable = ({
               {/* Left side: Items info and page size selector */}
               <div className="flex items-center gap-4">
                 <div className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{startIndex + 1}</span> to{" "}
+                  Showing <span className="font-medium">{totalItems === 0 ? 0 : startIndex + 1}</span> to{" "}
                   <span className="font-medium">{Math.min(endIndex, totalItems)}</span> of{" "}
                   <span className="font-medium">{totalItems}</span> items
                 </div>

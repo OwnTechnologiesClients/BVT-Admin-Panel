@@ -11,7 +11,7 @@ import { Video, FileText, Upload } from "lucide-react";
 const LessonContentTable = () => {
   const router = useRouter();
   const [contents, setContents] = useState([]);
-  const [allContents, setAllContents] = useState([]); // For accurate stats
+  const [contentStats, setContentStats] = useState({ withVideo: 0, withDocument: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -63,24 +63,26 @@ const LessonContentTable = () => {
     }
   }, []);
 
-  // Fetch all contents for accurate stats - only fetch once
-  const fetchAllContents = async () => {
+  const fetchContentStats = useCallback(async () => {
     try {
-      const response = await lessonContentAPI.getAllLessonContents({ limit: 10000 });
-      if (response.success) {
-        setAllContents(response.data || []);
+      const response = await lessonContentAPI.getLessonContentStats();
+      if (response.success && response.data) {
+        setContentStats({
+          withVideo: response.data.withVideo ?? 0,
+          withDocument: response.data.withDocument ?? 0
+        });
       }
     } catch (err) {
-      console.error('Error fetching all lesson contents:', err);
+      console.error('Error fetching lesson content stats:', err);
     }
-  };
+  }, []);
 
   // Initial fetch - only run once even in Strict Mode
   useEffect(() => {
     if (hasInitialFetch.current) return;
     hasInitialFetch.current = true;
     fetchLessonContents(1, 10, "", "");
-    fetchAllContents();
+    fetchContentStats();
     const timer = setTimeout(() => {
       isInitialMount.current = false;
     }, 100);
@@ -123,6 +125,7 @@ const LessonContentTable = () => {
         if (response.success) {
           showSuccess('Content Deleted!', 'The lesson content has been deleted successfully.');
           await fetchLessonContents(pagination.page, pagination.limit, searchTerm, filterType);
+          await fetchContentStats();
         } else {
           showError('Delete Failed', response.message || 'Failed to delete lesson content');
         }
@@ -252,10 +255,7 @@ const LessonContentTable = () => {
     },
     {
       label: "Videos",
-      value: allContents.filter(c => {
-        const type = getContentType(c);
-        return type === "video" || type === "mixed";
-      }).length,
+      value: contentStats.withVideo,
       icon: "🎥",
       bgColor: "bg-purple-100",
       iconColor: "text-purple-600",
@@ -263,10 +263,7 @@ const LessonContentTable = () => {
     },
     {
       label: "Documents",
-      value: allContents.filter(c => {
-        const type = getContentType(c);
-        return type === "document" || type === "mixed";
-      }).length,
+      value: contentStats.withDocument,
       icon: "📄",
       bgColor: "bg-green-100",
       iconColor: "text-green-600",

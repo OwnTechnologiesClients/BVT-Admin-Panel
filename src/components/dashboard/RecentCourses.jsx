@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Badge, Button } from "@/components/ui";
 import { Eye, Edit, Trash2, Loader2, Plus } from "lucide-react";
 import { getAllCourses } from "@/lib/api/course";
-import { getAllEnrollments } from "@/lib/api/enrollment";
+import { getEnrollmentCountsByCourse } from "@/lib/api/enrollment";
 
 export const RecentCourses = () => {
   const router = useRouter();
@@ -31,37 +31,20 @@ export const RecentCourses = () => {
           const coursesList = coursesResponse.data?.courses || coursesResponse.data || [];
           setCourses(coursesList);
 
-          // Fetch enrollments to get student counts per course
-          // Fetch all enrollments (no pagination limit to get accurate counts)
-          const enrollmentsResponse = await getAllEnrollments({ limit: 1000 });
-          if (enrollmentsResponse.success) {
-            const enrollments = enrollmentsResponse.data?.enrollments || enrollmentsResponse.data || [];
-            
-            // Count enrollments per course
-            const counts = {};
-            enrollments.forEach(enrollment => {
-              // Handle both populated and unpopulated courseId
-              let courseId = null;
-              if (enrollment.courseId) {
-                // If populated, courseId is an object with _id
-                if (enrollment.courseId._id) {
-                  courseId = enrollment.courseId._id.toString();
-                } 
-                // If not populated, courseId is just the ObjectId (Mongoose ObjectId)
-                else if (enrollment.courseId.toString && typeof enrollment.courseId.toString === 'function') {
-                  courseId = enrollment.courseId.toString();
-                }
-                // If it's already a string
-                else if (typeof enrollment.courseId === 'string') {
-                  courseId = enrollment.courseId;
-                }
+          const courseIds = coursesList
+            .map((c) => (c._id || c.id) && String(c._id || c.id))
+            .filter(Boolean);
+          if (courseIds.length) {
+            const enrollmentsResponse = await getEnrollmentCountsByCourse(
+              courseIds.join(',')
+            );
+            if (enrollmentsResponse.success) {
+              const counts = {};
+              for (const row of enrollmentsResponse.data || []) {
+                if (row.courseId) counts[row.courseId] = row.count;
               }
-              
-              if (courseId) {
-                counts[courseId] = (counts[courseId] || 0) + 1;
-              }
-            });
-            setEnrollmentCounts(counts);
+              setEnrollmentCounts(counts);
+            }
           }
         } else {
           setError(coursesResponse.message || "Failed to fetch courses");

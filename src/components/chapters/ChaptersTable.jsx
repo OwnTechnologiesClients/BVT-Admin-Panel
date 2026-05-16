@@ -12,9 +12,9 @@ import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetaler
 const ChaptersTable = () => {
   const router = useRouter();
   const [chapters, setChapters] = useState([]);
-  const [allChapters, setAllChapters] = useState([]); // For accurate stats
+  const [chapterStats, setChapterStats] = useState({ activeChapters: 0 });
   const [courses, setCourses] = useState([]);
-  const [lessons, setLessons] = useState([]);
+  const [lessonCountsByChapter, setLessonCountsByChapter] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -78,28 +78,30 @@ const ChaptersTable = () => {
     }
   };
 
-  // Fetch all chapters for accurate stats - only fetch once
-  const fetchAllChapters = async () => {
+  const fetchChapterStats = async () => {
     try {
-      const response = await chapterAPI.getAllChapters({ limit: 10000 });
-      if (response.success) {
-        setAllChapters(response.data || []);
+      const response = await chapterAPI.getChapterStats();
+      if (response.success && response.data) {
+        setChapterStats({ activeChapters: response.data.activeChapters ?? 0 });
       }
     } catch (err) {
-      console.error('Error fetching all chapters:', err);
+      console.error('Error fetching chapter stats:', err);
     }
   };
 
-  // Fetch lessons to count per chapter - only fetch once
-  const fetchLessons = async () => {
+  const fetchLessonCountsByChapter = async () => {
     try {
-      const response = await lessonAPI.getAllLessons({ limit: 1000 });
+      const response = await lessonAPI.getLessonCountsByChapter();
       if (response.success) {
-        const lessonsList = response.data?.lessons || response.data || [];
-        setLessons(lessonsList);
+        const list = response.data || [];
+        const map = {};
+        for (const row of list) {
+          if (row.chapterId) map[String(row.chapterId)] = row.count;
+        }
+        setLessonCountsByChapter(map);
       }
     } catch (err) {
-      console.error('Error fetching lessons:', err);
+      console.error('Error fetching lesson counts by chapter:', err);
     }
   };
 
@@ -108,9 +110,9 @@ const ChaptersTable = () => {
     if (hasInitialFetch.current) return;
     hasInitialFetch.current = true;
     fetchChapters(1, 10, "", "");
-    fetchAllChapters();
+    fetchChapterStats();
     fetchCourses();
-    fetchLessons();
+    fetchLessonCountsByChapter();
     const timer = setTimeout(() => {
       isInitialMount.current = false;
     }, 100);
@@ -180,10 +182,8 @@ const ChaptersTable = () => {
   // Format chapter data
   const formatChapter = (chapter) => {
     const course = chapter.courseId || {};
-    // Count lessons for this chapter
-    const lessonsCount = lessons.filter(
-      lesson => lesson.chapterId?._id === chapter._id || lesson.chapterId === chapter._id
-    ).length;
+    const chapterIdStr = chapter._id ? String(chapter._id) : '';
+    const lessonsCount = lessonCountsByChapter[chapterIdStr] ?? 0;
     
     return {
       id: chapter._id,
@@ -244,7 +244,7 @@ const ChaptersTable = () => {
     },
     {
       label: "Active Chapters",
-      value: allChapters.filter(c => c.isActive).length,
+      value: chapterStats.activeChapters,
       icon: "✓",
       bgColor: "bg-green-100",
       iconColor: "text-green-600",

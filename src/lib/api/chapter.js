@@ -82,3 +82,7 @@ export const deleteChapter = async (id) => {
   });
 };
 
+export const getChapterStats = async () => {
+  return await apiRequest('/chapters/stats', { method: 'GET' });
+};
+

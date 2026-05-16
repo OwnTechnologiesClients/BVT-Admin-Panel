@@ -94,3 +94,11 @@ export const deleteLesson = async (id) => {
   });
 };
 
+export const getLessonStats = async () => {
+  return await apiRequest('/lessons/stats', { method: 'GET' });
+};
+
+export const getLessonCountsByChapter = async () => {
+  return await apiRequest('/lessons/counts-by-chapter', { method: 'GET' });
+};
+

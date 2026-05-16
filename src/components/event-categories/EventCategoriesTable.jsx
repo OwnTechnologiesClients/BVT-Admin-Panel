@@ -10,7 +10,7 @@ import { showSuccess, showError, showDeleteConfirm } from "@/lib/utils/sweetaler
 const EventCategoriesTable = () => {
   const router = useRouter();
   const [categories, setCategories] = useState([]);
-  const [allCategories, setAllCategories] = useState([]); // For accurate stats
+  const [categoryStats, setCategoryStats] = useState({ activeCategories: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -60,15 +60,14 @@ const EventCategoriesTable = () => {
     }
   }, []);
 
-  // Fetch all categories for accurate stats - only fetch once
-  const fetchAllCategories = async () => {
+  const fetchCategoryStats = async () => {
     try {
-      const response = await categoryAPI.getAllCategories({ limit: 10000 });
-      if (response.success) {
-        setAllCategories(response.data || []);
+      const response = await categoryAPI.getCategoryStats();
+      if (response.success && response.data) {
+        setCategoryStats({ activeCategories: response.data.activeCategories ?? 0 });
       }
     } catch (err) {
-      console.error('Error fetching all categories:', err);
+      console.error('Error fetching event theme stats:', err);
     }
   };
 
@@ -77,7 +76,7 @@ const EventCategoriesTable = () => {
     if (hasInitialFetch.current) return;
     hasInitialFetch.current = true;
     fetchCategories(1, 10, "");
-    fetchAllCategories();
+    fetchCategoryStats();
     const timer = setTimeout(() => {
       isInitialMount.current = false;
     }, 100);
@@ -185,7 +184,7 @@ const EventCategoriesTable = () => {
     },
     {
       label: "Active Themes",
-      value: allCategories.filter(c => c.isActive).length,
+      value: categoryStats.activeCategories,
       icon: "✓",
       bgColor: "bg-green-100",
       iconColor: "text-green-600",

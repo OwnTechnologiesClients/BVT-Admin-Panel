@@ -16,7 +16,6 @@ export const SidebarProvider = ({ children }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [activeItem, setActiveItem] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -61,12 +60,10 @@ export const SidebarProvider = ({ children }) => {
       value={{
         isExpanded: isMobile ? false : isExpanded,
         isMobileOpen,
-        isHovered,
         activeItem,
         openSubmenu,
         toggleSidebar,
         toggleMobileSidebar,
-        setIsHovered,
         setActiveItem,
         toggleSubmenu,
       }}

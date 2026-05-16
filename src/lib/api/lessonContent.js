@@ -20,6 +20,8 @@ export const getAllLessonContents = async (params = {}) => {
   if (params.chapterId) queryParams.append('chapterId', params.chapterId);
   if (params.lessonId) queryParams.append('lessonId', params.lessonId);
   if (params.search) queryParams.append('search', params.search);
+  if (params.sort_column) queryParams.append('sort_column', params.sort_column);
+  if (params.sort_direction) queryParams.append('sort_direction', params.sort_direction);
 
   const queryString = queryParams.toString();
   const endpoint = `/lesson-contents/list${queryString ? `?${queryString}` : ''}`;
@@ -27,6 +29,23 @@ export const getAllLessonContents = async (params = {}) => {
   return await apiRequest(endpoint, {
     method: 'GET',
   });
+};
+
+/** Lightweight stats for admin dashboard (aggregation — no large text fields). */
+export const getLessonContentStats = async (params = {}) => {
+  const queryParams = new URLSearchParams();
+  if (params.courseId) queryParams.append('courseId', params.courseId);
+  if (params.chapterId) queryParams.append('chapterId', params.chapterId);
+  if (params.lessonId) queryParams.append('lessonId', params.lessonId);
+  if (params.search) queryParams.append('search', params.search);
+  const queryString = queryParams.toString();
+  const endpoint = `/lesson-contents/stats${queryString ? `?${queryString}` : ''}`;
+  return await apiRequest(endpoint, { method: 'GET' });
+};
+
+/** Per-lesson content counts for lessons table (small payload). */
+export const getLessonContentCountsByLesson = async () => {
+  return await apiRequest('/lesson-contents/counts-by-lesson', { method: 'GET' });
 };
 
 /**
